@@ -3,7 +3,7 @@
 Use this checklist before making a demo repository public or before linking it from project documentation.
 
 - Runtime admission has both allowed and blocked examples.
-- Static repository guards run in CI and locally.
+- Static repository guards, including agent context checks, run in CI and locally.
 - CI has read-only repository permissions.
 - GitHub Actions are pinned to commit SHAs.
 - Dependencies are exact and hash-pinned.

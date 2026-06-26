@@ -15,6 +15,7 @@ It shows how the two projects can be dogfooded in a repository that is safe to p
 
 `agent-guard` handles static repository gates:
 
+- reject unsafe agent context file instructions
 - reject private artifact paths before publication
 - reject unsafe public-demo content patterns
 - reject forbidden API endpoint references
@@ -55,6 +56,7 @@ The end-to-end script runs:
 
 - expected pass and fail runtime admission checks
 - path guard
+- context guard
 - content guard
 - API guard
 - digest guard

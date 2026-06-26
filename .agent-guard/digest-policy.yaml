@@ -2,7 +2,7 @@
 checks:
   - id: readme
     path: README.md
-    sha256: 28c55400460ca09019ba1d2720dcf04ef68c5b8ca1048746bef2ea7c02917d8d
+    sha256: e0bb413769de3ceebbc383718aac8f1485c875cb11cd0799df451ae3001145ab
   - id: policy_wrapper
     path: scripts/policy_admit.py
     sha256: 3addc8cc8432062a63068729b9eca20ec30ff347f16456c0b5ab3dcd479a8922

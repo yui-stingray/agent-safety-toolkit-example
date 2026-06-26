@@ -1,0 +1,18 @@
+scan:
+  include:
+    - "AGENTS.md"
+    - "**/AGENTS.md"
+    - ".github/copilot-instructions.md"
+    - ".github/instructions/**/*.instructions.md"
+  exclude:
+    - ".git/**"
+    - ".venv/**"
+    - ".pytest_cache/**"
+    - "__pycache__/**"
+
+policy:
+  extra_forbidden_patterns:
+    - id: broad_tool_auto_allow
+      severity: medium
+      pattern: "(?i)always\\s+allow.{0,80}(bash|shell|network|write|edit)"
+      message: "agent context should not broadly auto-allow risky tools"
