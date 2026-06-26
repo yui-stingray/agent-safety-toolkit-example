@@ -68,6 +68,7 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
 
 "$PYTHON_BIN" -m agent_guard.cli path check --root . --policy .agent-guard/path-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli context check --root . --policy .agent-guard/context-policy.yaml --json
+"$PYTHON_BIN" -m agent_guard.cli context inventory --root . --policy .agent-guard/context-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli content check \
   --repo-root . \
   --policy .agent-guard/content-policy.yaml \

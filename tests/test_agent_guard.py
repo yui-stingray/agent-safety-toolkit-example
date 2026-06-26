@@ -62,6 +62,60 @@ def test_repo_guard_checks_are_clean(args: tuple[str, ...]) -> None:
     assert payload["finding_count"] == 0
 
 
+def test_context_inventory_is_redacted_and_repo_relative() -> None:
+    result = run_guard("context", "inventory", "--root", ".", "--policy", ".agent-guard/context-policy.yaml", "--json")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["command"] == "inventory"
+    assert payload["finding_count"] == 0
+    assert payload["inventory"]["schema_version"] == "agent-guard.context_inventory.v1"
+
+    serialized = json.dumps(payload, sort_keys=True)
+    assert str(ROOT) not in serialized
+    assert "Keep changes small" not in serialized
+    assert "snippet" not in serialized
+    assert "matched_text" not in serialized
+    assert "raw_regex" not in serialized
+
+    files = payload["inventory"]["context_files"]
+    assert files
+    assert all(not item["path"].startswith("/") for item in files)
+    assert {item["path"] for item in files} == {"AGENTS.md"}
+
+
+def test_context_inventory_does_not_emit_raw_sensitive_context(tmp_path: Path) -> None:
+    policy = tmp_path / "context-policy.yaml"
+    policy.write_text("scan:\n  include:\n    - AGENTS.md\n  exclude: []\n", encoding="utf-8")
+    agents = tmp_path / "AGENTS.md"
+    fake_token = "github_pat_" + ("0" * 20)
+    windows_path = "C:" + "\\" + "Users" + "\\" + "sample" + "\\" + "private" + "\\" + "note.txt"
+    posix_path = "/" + "home" + "/" + "sample" + "/" + "private" + "/" + "note.txt"
+    program_text = "support " + "program " + "application wording"
+    sentinels = [
+        "sentinel raw instruction beta",
+        fake_token,
+        windows_path,
+        posix_path,
+        program_text,
+    ]
+    agents.write_text("\n".join(sentinels) + "\n", encoding="utf-8")
+
+    result = run_guard("context", "inventory", "--root", str(tmp_path), "--policy", str(policy), "--json")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    serialized = json.dumps(payload, sort_keys=True)
+    assert payload["command"] == "inventory"
+    assert payload["inventory"]["context_files"][0]["path"] == "AGENTS.md"
+    assert str(tmp_path) not in serialized
+    for sentinel in sentinels:
+        assert sentinel not in serialized
+    for forbidden_field in ("snippet", "matched_text", "raw_regex"):
+        assert forbidden_field not in serialized
+
+
 def test_path_guard_rejects_private_artifact_paths(tmp_path: Path) -> None:
     bad_dir = tmp_path / "artifacts" / "private"
     bad_dir.mkdir(parents=True)
