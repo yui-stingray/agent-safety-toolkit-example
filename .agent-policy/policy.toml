@@ -1,0 +1,21 @@
+default_mode = "require_approval"
+
+[[repo_policy]]
+repo = "yui-stingray/agent-safety-toolkit-example"
+ownership_class = "internal"
+
+[repo_policy.capabilities]
+read = "auto_allow"
+write = "require_approval"
+commit = "require_approval"
+push = "require_approval"
+"merge.pr" = "require_approval"
+"artifact.publish" = "require_approval"
+"secret.materialize" = "deny"
+
+[[repo_policy]]
+repo = "external/example"
+ownership_class = "external"
+
+[repo_policy.capabilities]
+read = "auto_allow"

@@ -1,0 +1,23 @@
+scan:
+  include:
+    - README.md
+    - CONTRIBUTING.md
+    - SECURITY.md
+    - docs
+    - scripts
+    - tests
+    - .github
+  exclude:
+    - .git
+    - .venv
+    - .pytest_cache
+    - __pycache__
+policy:
+  allowed_api_patterns:
+    - "^https://github\\.com/"
+    - "^https://docs\\.github\\.com/"
+    - "^https://pypi\\.org/"
+  forbidden_api_patterns:
+    - "^https://api\\.openai\\.com/"
+    - "^https://api\\.anthropic\\.com/"
+    - "^https://hooks\\.slack\\.com/"

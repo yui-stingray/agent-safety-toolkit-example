@@ -1,0 +1,30 @@
+scan:
+  include:
+    - "."
+  exclude:
+    - ".git"
+    - ".venv"
+    - ".pytest_cache"
+    - "__pycache__"
+    - "build"
+    - "dist"
+policy:
+  allowed_path_patterns:
+    - "^\\.env\\.example$"
+  forbidden_path_patterns:
+    - id: private_artifact_path
+      severity: high
+      pattern: "(^|/)artifacts/(private|local)(/|$)"
+      message: private artifact directories must not be committed
+    - id: env_file
+      severity: high
+      pattern: "(^|/)\\.env($|\\.)"
+      message: env files must not be committed
+    - id: local_database
+      severity: high
+      pattern: "\\.(sqlite|sqlite3|db)$"
+      message: local databases must not be committed
+    - id: private_key_path
+      severity: high
+      pattern: "(^|/)(id_rsa|id_ed25519|.*\\.pem)$"
+      message: private key material must not be committed

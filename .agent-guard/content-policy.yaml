@@ -1,0 +1,41 @@
+file_globs:
+  - "**/*.md"
+  - "**/*.py"
+  - "**/*.sh"
+  - "**/*.toml"
+  - "**/*.yaml"
+  - "**/*.yml"
+  - "**/*.txt"
+exclude_globs:
+  - ".agent-guard/**"
+  - ".git/**"
+  - ".venv/**"
+  - ".pytest_cache/**"
+  - "__pycache__/**"
+  - "build/**"
+  - "dist/**"
+forbidden_patterns:
+  - id: destructive_git_command
+    severity: high
+    pattern: "(?i)git\\s+(reset\\s+--hard|push\\s+--force\\b|clean\\s+-f)"
+    message: destructive git command text is not allowed in public demo content
+  - id: destructive_remove_command
+    severity: high
+    pattern: "(?i)rm\\s+-rf\\s+(/|~|[A-Za-z]:)"
+    message: destructive remove command text is not allowed in public demo content
+  - id: pipe_to_shell
+    severity: high
+    pattern: "(?i)curl\\s+[^\\n|]+\\|\\s*(bash|sh)\\b"
+    message: pipe-to-shell command text is not allowed in public demo content
+  - id: secret_prompt
+    severity: high
+    pattern: "(?i)(provide|paste|enter)\\s+(the\\s+)?(api[_ -]?key|token|password|secret)"
+    message: plaintext secret prompt text is not allowed
+  - id: credential_like_token
+    severity: high
+    pattern: "(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,})"
+    message: credential-like token text is not allowed
+  - id: private_local_path
+    severity: high
+    pattern: "(/home/[A-Za-z0-9_.-]+|/Users/[A-Za-z0-9_.-]+|[A-Za-z]:\\\\Users\\\\[A-Za-z0-9_.-]+)"
+    message: local user path text is not allowed
