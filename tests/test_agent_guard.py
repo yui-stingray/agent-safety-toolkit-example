@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+ADOPTION_RECIPE = ROOT / "docs" / "adoption-recipe.md"
+PUBLISHING_CHECKLIST = ROOT / "docs" / "publishing-checklist.md"
 
 
 def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
@@ -107,6 +109,25 @@ def test_context_inventory_is_redacted_and_repo_relative() -> None:
     assert all(not item["path"].startswith("/") for item in files)
     assert {item["path"] for item in files} == {"AGENTS.md"}
     assert all(item["status"] == "present" for item in payload["inventory"]["permission_boundaries"])
+
+
+def test_adoption_recipe_is_copyable_and_public_safe() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    recipe = ADOPTION_RECIPE.read_text(encoding="utf-8")
+    checklist = PUBLISHING_CHECKLIST.read_text(encoding="utf-8")
+
+    assert "docs/adoption-recipe.md" in readme
+    assert ".agent-policy/policy.toml" in recipe
+    assert ".agent-guard/context-policy.yaml" in recipe
+    assert "scripts/policy_admit.py" in recipe
+    assert "python3 scripts/update_digests.py" in recipe
+    assert "python3 -m venv .venv" in recipe
+    assert "agent-guard report --root ." in recipe
+    assert "Do not copy or publish" in recipe
+    assert "generated evidence from a private repository" in recipe
+    assert "LLM reviewer" in recipe
+    assert "model router" in recipe
+    assert "de-personalized" in checklist
 
 
 def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:

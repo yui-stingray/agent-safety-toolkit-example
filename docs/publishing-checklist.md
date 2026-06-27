@@ -9,4 +9,5 @@ Use this checklist before making a demo repository public or before linking it f
 - Dependencies are exact and hash-pinned.
 - Negative fixtures are generated during tests, not committed as payload files.
 - Safety-critical digests were regenerated after the final content change.
+- The adoption recipe has been de-personalized before linking or publishing.
 - Repository metadata includes a license, contribution guide, security policy, issue template, pull request template, and relevant topics.

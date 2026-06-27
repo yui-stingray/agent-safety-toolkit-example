@@ -3,6 +3,8 @@
 This repository is a public-safe demo of using [`agent-policy`](https://github.com/yui-stingray/agent-policy) and [`agent-guard`](https://github.com/yui-stingray/agent-guard) together as an agent safety toolkit.
 
 It shows how the two projects can be dogfooded in a repository that is safe to publish.
+For copying the pattern into another repository, use
+[`docs/adoption-recipe.md`](docs/adoption-recipe.md).
 
 ## What It Demonstrates
 
