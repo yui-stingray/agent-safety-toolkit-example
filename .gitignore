@@ -10,3 +10,4 @@ dist/
 !.env.example
 artifacts/private/
 artifacts/local/
+.agent-guard/evidence/

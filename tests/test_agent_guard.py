@@ -131,8 +131,45 @@ def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
     assert payload["report"]["sanitized"] is True
     assert payload["context_lock"]["status"] == "ok"
     assert payload["context_lock"]["covered_count"] == payload["context_lock"]["checked_count"]
+    assert payload["context_lock"]["covered"] == [
+        {
+            "check_id": "agent_context",
+            "kind": "agents_md",
+            "path": "AGENTS.md",
+            "status": "covered",
+        }
+    ]
     assert payload["digest"]["status"] == "ok"
 
+    serialized = json.dumps(payload, sort_keys=True)
+    assert str(ROOT) not in serialized
+    assert "Shell, filesystem write" not in serialized
+    assert "snippet" not in serialized
+    assert "matched_text" not in serialized
+
+
+def test_report_output_file_is_sanitized_and_repo_relative(tmp_path: Path) -> None:
+    output = tmp_path / "evidence" / "agent-guard-report.json"
+    result = run_guard(
+        "report",
+        "--root",
+        ".",
+        "--context-policy",
+        ".agent-guard/context-policy.yaml",
+        "--digest-policy",
+        ".agent-guard/digest-policy.yaml",
+        "--format",
+        "json",
+        "--output",
+        str(output),
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == ""
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["status"] == "ok"
+    assert payload["report"]["schema_version"] == "agent-guard.report_evidence.v1"
+    assert payload["context_lock"]["covered_count"] == 1
     serialized = json.dumps(payload, sort_keys=True)
     assert str(ROOT) not in serialized
     assert "Shell, filesystem write" not in serialized

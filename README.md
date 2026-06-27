@@ -25,6 +25,9 @@ It shows how the two projects can be dogfooded in a repository that is safe to p
 - emit a sanitized JSON evidence report for reviewers and automation
 
 Together they cover different layers. `agent-policy` answers "may this agent action continue now?" while `agent-guard` answers "does this repository still look safe to publish and operate?"
+The demo pairs one runtime admission audit event with one static guard evidence
+report so maintainers can review both sides without storing raw prompts,
+repository contents, hashes, tokens, or local paths.
 
 ## Runtime Admission Demo
 
@@ -41,6 +44,12 @@ Run a single admission check:
 
 ```bash
 python scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-safety-toolkit-example
+```
+
+Emit the deterministic audit event shape used by wrappers and CI:
+
+```bash
+python scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-safety-toolkit-example --audit-event --command read_docs --path README.md
 ```
 
 ## Local Verification
@@ -67,6 +76,13 @@ The end-to-end script runs:
 - digest guard
 - sanitized JSON evidence report
 
+It writes generated evidence files under `.agent-guard/evidence/`:
+
+- `policy-admission-event.json`: deterministic `agent-policy` runtime
+  admission evidence for one normalized action.
+- `agent-guard-report.json`: sanitized `agent-guard` static repository
+  evidence, including context lock coverage.
+
 ## Updating Digests
 
 The digest policy pins files that define the public demo contract:
@@ -82,7 +98,7 @@ After an intentional change to one of those files:
 python scripts/update_digests.py
 agent-guard digest check --root . --policy .agent-guard/digest-policy.yaml
 agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/digest-policy.yaml --json
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --digest-policy .agent-guard/digest-policy.yaml --format json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --digest-policy .agent-guard/digest-policy.yaml --format json --output .agent-guard/evidence/agent-guard-report.json
 ```
 
 ## Public Safety Scope

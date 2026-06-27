@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Final
 
-from agent_policy import evaluate, load_policy_file
+from agent_policy import audit_event_to_json, build_audit_event, evaluate, load_policy_file
 
 DEFAULT_REPO: Final = "yui-stingray/agent-safety-toolkit-example"
 DEFAULT_POLICY: Final = ".agent-policy/policy.toml"
@@ -20,6 +21,12 @@ ACTION_CAPABILITIES: Final[dict[str, str]] = {
     "publish_release": "artifact.publish",
     "force_push": "push.force",
 }
+SAFE_LABEL_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$")
+SAFE_REPO_PATH_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
+WINDOWS_DRIVE_RE: Final = re.compile(r"^[A-Za-z]:[\\/]")
+SECRETISH_RE: Final = re.compile(
+    r"(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16})"
+)
 
 EXIT_BY_MODE: Final[dict[str, int]] = {
     "auto_allow": 0,
@@ -44,6 +51,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="mark this as the first mutating interaction with the target repository",
     )
+    parser.add_argument(
+        "--audit-event",
+        action="store_true",
+        help="emit the deterministic agent-policy audit event instead of the compact decision JSON",
+    )
+    parser.add_argument("--session-id", default=None, help="optional wrapper-owned session identifier")
+    parser.add_argument("--command", default=None, help="optional wrapper-owned command label")
+    parser.add_argument("--path", default=None, help="optional wrapper-owned repository-relative path")
     return parser.parse_args(argv)
 
 
@@ -52,6 +67,34 @@ def build_context(args: argparse.Namespace) -> dict[str, object]:
     if args.first_write:
         context["first_write_to_repo"] = True
     return context
+
+
+def safe_optional_label(value: str | None, *, field: str) -> str | None:
+    if value is None:
+        return None
+    if SECRETISH_RE.search(value):
+        raise ValueError(f"{field} must not contain secret-shaped material")
+    if not SAFE_LABEL_RE.fullmatch(value):
+        raise ValueError(f"{field} must be a short non-secret label")
+    return value
+
+
+def safe_optional_repo_path(value: str | None) -> str | None:
+    if value is None:
+        return None
+    path = Path(value)
+    if path.is_absolute() or any(part == ".." for part in path.parts):
+        raise ValueError("path must be repository-relative and must not contain parent traversal")
+    windows_path = PureWindowsPath(value)
+    if "\\" in value or WINDOWS_DRIVE_RE.match(value) or windows_path.drive or windows_path.root:
+        raise ValueError("path must be repository-relative and must not contain local path syntax")
+    if not SAFE_REPO_PATH_RE.fullmatch(value):
+        raise ValueError("path must be a short repository-relative public path")
+    if any(part in ("", ".") for part in path.parts):
+        raise ValueError("path must be a normalized repository-relative public path")
+    if SECRETISH_RE.search(value):
+        raise ValueError("path must not contain secret-shaped material")
+    return path.as_posix()
 
 
 def emit(payload: dict[str, object]) -> None:
@@ -64,11 +107,15 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         policy = load_policy_file(Path(args.policy))
+        context = build_context(args)
+        audit_command = safe_optional_label(args.command, field="command")
+        audit_session_id = safe_optional_label(args.session_id, field="session-id")
+        audit_path = safe_optional_repo_path(args.path)
         decision = evaluate(
             policy,
             repo=args.repo,
             capability=capability,
-            context=build_context(args),
+            context=context,
         )
     except Exception as exc:
         emit(
@@ -81,16 +128,28 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    payload = {
-        "status": decision.mode,
-        "action": args.action,
-        "repo": args.repo,
-        "capability": capability,
-        "mode": decision.mode,
-        "reason": decision.reason,
-        "matched_repo": decision.matched_repo,
-    }
-    emit(payload)
+    if args.audit_event:
+        event = build_audit_event(
+            repo=args.repo,
+            capability=capability,
+            context=context,
+            decision=decision,
+            session_id=audit_session_id,
+            command=audit_command,
+            path=audit_path,
+        )
+        print(audit_event_to_json(event))
+    else:
+        payload = {
+            "status": decision.mode,
+            "action": args.action,
+            "repo": args.repo,
+            "capability": capability,
+            "mode": decision.mode,
+            "reason": decision.reason,
+            "matched_repo": decision.matched_repo,
+        }
+        emit(payload)
     return EXIT_BY_MODE[decision.mode]
 
 

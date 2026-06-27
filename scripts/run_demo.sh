@@ -26,6 +26,7 @@ CONTENT_TARGETS=(
   requirements
   pyproject.toml
 )
+EVIDENCE_DIR=".agent-guard/evidence"
 
 expect_exit() {
   expected="$1"
@@ -44,6 +45,16 @@ expect_exit() {
   --action read_docs \
   --repo yui-stingray/agent-safety-toolkit-example \
   --ownership-class internal
+
+mkdir -p "$EVIDENCE_DIR"
+"$PYTHON_BIN" scripts/policy_admit.py \
+  --action read_docs \
+  --repo yui-stingray/agent-safety-toolkit-example \
+  --ownership-class internal \
+  --audit-event \
+  --command read_docs \
+  --path README.md \
+  > "$EVIDENCE_DIR/policy-admission-event.json"
 
 expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --action edit_docs \
@@ -87,4 +98,5 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --root . \
   --context-policy .agent-guard/context-policy.yaml \
   --digest-policy .agent-guard/digest-policy.yaml \
-  --format json
+  --format json \
+  --output "$EVIDENCE_DIR/agent-guard-report.json"
