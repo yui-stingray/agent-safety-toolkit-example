@@ -27,6 +27,18 @@ def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
         ("path", "check", "--root", ".", "--policy", ".agent-guard/path-policy.yaml", "--json"),
         ("context", "check", "--root", ".", "--policy", ".agent-guard/context-policy.yaml", "--json"),
         (
+            "context",
+            "lock",
+            "--root",
+            ".",
+            "--policy",
+            ".agent-guard/context-policy.yaml",
+            "--check",
+            "--digest-policy",
+            ".agent-guard/digest-policy.yaml",
+            "--json",
+        ),
+        (
             "content",
             "check",
             "--repo-root",
@@ -52,6 +64,17 @@ def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
         ),
         ("api", "check", "--root", ".", "--policy", ".agent-guard/api-policy.yaml", "--json"),
         ("digest", "check", "--root", ".", "--policy", ".agent-guard/digest-policy.yaml", "--json"),
+        (
+            "report",
+            "--root",
+            ".",
+            "--context-policy",
+            ".agent-guard/context-policy.yaml",
+            "--digest-policy",
+            ".agent-guard/digest-policy.yaml",
+            "--format",
+            "json",
+        ),
     ],
 )
 def test_repo_guard_checks_are_clean(args: tuple[str, ...]) -> None:
@@ -83,6 +106,38 @@ def test_context_inventory_is_redacted_and_repo_relative() -> None:
     assert files
     assert all(not item["path"].startswith("/") for item in files)
     assert {item["path"] for item in files} == {"AGENTS.md"}
+    assert all(item["status"] == "present" for item in payload["inventory"]["permission_boundaries"])
+
+
+def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
+    result = run_guard(
+        "report",
+        "--root",
+        ".",
+        "--context-policy",
+        ".agent-guard/context-policy.yaml",
+        "--digest-policy",
+        ".agent-guard/digest-policy.yaml",
+        "--format",
+        "json",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["command"] == "report"
+    assert payload["report"]["schema_version"] == "agent-guard.report_evidence.v1"
+    assert payload["report"]["format"] == "json"
+    assert payload["report"]["sanitized"] is True
+    assert payload["context_lock"]["status"] == "ok"
+    assert payload["context_lock"]["covered_count"] == payload["context_lock"]["checked_count"]
+    assert payload["digest"]["status"] == "ok"
+
+    serialized = json.dumps(payload, sort_keys=True)
+    assert str(ROOT) not in serialized
+    assert "Shell, filesystem write" not in serialized
+    assert "snippet" not in serialized
+    assert "matched_text" not in serialized
 
 
 def test_context_inventory_does_not_emit_raw_sensitive_context(tmp_path: Path) -> None:

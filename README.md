@@ -17,10 +17,12 @@ It shows how the two projects can be dogfooded in a repository that is safe to p
 
 - reject unsafe agent context file instructions
 - emit redacted agent context inventory metadata for review evidence
+- verify that discovered agent context files are pinned by digest policy
 - reject private artifact paths before publication
 - reject unsafe public-demo content patterns
 - reject forbidden API endpoint references
 - pin safety-critical file digests so drift is visible in CI
+- emit a sanitized JSON evidence report for reviewers and automation
 
 Together they cover different layers. `agent-policy` answers "may this agent action continue now?" while `agent-guard` answers "does this repository still look safe to publish and operate?"
 
@@ -59,14 +61,17 @@ The end-to-end script runs:
 - path guard
 - context guard
 - redacted context inventory
+- context lock coverage against the committed digest policy
 - content guard
 - API guard
 - digest guard
+- sanitized JSON evidence report
 
 ## Updating Digests
 
 The digest policy pins files that define the public demo contract:
 
+- `AGENTS.md`
 - `README.md`
 - `scripts/policy_admit.py`
 - `.agent-policy/policy.toml`
@@ -76,6 +81,8 @@ After an intentional change to one of those files:
 ```bash
 python scripts/update_digests.py
 agent-guard digest check --root . --policy .agent-guard/digest-policy.yaml
+agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/digest-policy.yaml --json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --digest-policy .agent-guard/digest-policy.yaml --format json
 ```
 
 ## Public Safety Scope

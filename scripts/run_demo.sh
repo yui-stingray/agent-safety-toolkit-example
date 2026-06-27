@@ -69,6 +69,12 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
 "$PYTHON_BIN" -m agent_guard.cli path check --root . --policy .agent-guard/path-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli context check --root . --policy .agent-guard/context-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli context inventory --root . --policy .agent-guard/context-policy.yaml --json
+"$PYTHON_BIN" -m agent_guard.cli context lock \
+  --root . \
+  --policy .agent-guard/context-policy.yaml \
+  --check \
+  --digest-policy .agent-guard/digest-policy.yaml \
+  --json
 "$PYTHON_BIN" -m agent_guard.cli content check \
   --repo-root . \
   --policy .agent-guard/content-policy.yaml \
@@ -77,3 +83,8 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --json
 "$PYTHON_BIN" -m agent_guard.cli api check --root . --policy .agent-guard/api-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli digest check --root . --policy .agent-guard/digest-policy.yaml --json
+"$PYTHON_BIN" -m agent_guard.cli report \
+  --root . \
+  --context-policy .agent-guard/context-policy.yaml \
+  --digest-policy .agent-guard/digest-policy.yaml \
+  --format json
