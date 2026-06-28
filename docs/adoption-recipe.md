@@ -12,8 +12,10 @@ Start with these files:
 - `.agent-guard/api-policy.yaml`
 - `.agent-guard/content-policy.yaml`
 - `.agent-guard/context-policy.yaml`
-- `.agent-guard/digest-policy.yaml`
+- `.agent-guard/context-digest-policy.yaml`
 - `.agent-guard/path-policy.yaml`
+- `.agent-guard/workflow-policy.yaml`
+- `examples/evidence_consumer.py`
 - `scripts/policy_admit.py`
 - `scripts/run_demo.sh`
 - `scripts/update_digests.py`
@@ -34,14 +36,14 @@ Replace the demo-specific values before linking the repository publicly:
 - API allow/deny rules in `.agent-guard/api-policy.yaml`;
 - path rules for local artifacts, generated outputs, and private fixtures;
 - branch names and workflow names in `.github/workflows/ci.yml`;
-- digest pins in `.agent-guard/digest-policy.yaml`.
+- digest pins in `.agent-guard/context-digest-policy.yaml`.
 
 Regenerate digest pins after every intentional change to pinned files:
 
 ```bash
 python3 scripts/update_digests.py
-agent-guard digest check --root . --policy .agent-guard/digest-policy.yaml
-agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/digest-policy.yaml --json
+agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml
+agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
 ```
 
 ## First Verification Pass
@@ -54,7 +56,7 @@ python3 -m venv .venv
 python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
 python -m pytest -q
 bash scripts/run_demo.sh
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --digest-policy .agent-guard/digest-policy.yaml --format json
+python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json
 ```
 
 If dependency hashes do not match on the target platform, regenerate the lock
@@ -81,6 +83,8 @@ logic, or CI guard commands, review:
 
 - the `agent-policy` runtime admission decision or audit event;
 - the `agent-guard` context inventory and context lock coverage;
+- the `agent-guard` surface inventory v2 and evidence-pack manifest;
+- the recommended-profile conformance result;
 - digest drift for pinned safety-critical files;
 - workflow drift for required guard commands;
 - whether the evidence omits raw prompts, snippets, hash values, secrets, and

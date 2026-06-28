@@ -29,5 +29,8 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+      - name: Check guard workflow wiring
+        run: python -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json > /tmp/agent-surface-inventory.json
+
       - name: Run end-to-end demo
         run: bash scripts/run_demo.sh

@@ -7,12 +7,13 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICY_PATH = ROOT / ".agent-guard" / "digest-policy.yaml"
+POLICY_PATH = ROOT / ".agent-guard" / "context-digest-policy.yaml"
 PINNED_FILES = [
     ("agent_context", "AGENTS.md"),
     ("readme", "README.md"),
     ("policy_wrapper", "scripts/policy_admit.py"),
     ("policy_matrix", ".agent-policy/policy.toml"),
+    ("workflow_policy", ".agent-guard/workflow-policy.yaml"),
 ]
 
 

@@ -19,6 +19,7 @@ CONTENT_TARGETS=(
   SECURITY.md
   CODE_OF_CONDUCT.md
   docs
+  examples
   scripts
   tests
   .github
@@ -80,11 +81,17 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
 "$PYTHON_BIN" -m agent_guard.cli path check --root . --policy .agent-guard/path-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli context check --root . --policy .agent-guard/context-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli context inventory --root . --policy .agent-guard/context-policy.yaml --json
+"$PYTHON_BIN" -m agent_guard.cli surface inventory \
+  --root . \
+  --context-policy .agent-guard/context-policy.yaml \
+  --schema-version v2 \
+  --json \
+  > "$EVIDENCE_DIR/agent-surface-inventory.json"
 "$PYTHON_BIN" -m agent_guard.cli context lock \
   --root . \
   --policy .agent-guard/context-policy.yaml \
   --check \
-  --digest-policy .agent-guard/digest-policy.yaml \
+  --digest-policy .agent-guard/context-digest-policy.yaml \
   --json
 "$PYTHON_BIN" -m agent_guard.cli content check \
   --repo-root . \
@@ -93,10 +100,36 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --targets "${CONTENT_TARGETS[@]}" \
   --json
 "$PYTHON_BIN" -m agent_guard.cli api check --root . --policy .agent-guard/api-policy.yaml --json
-"$PYTHON_BIN" -m agent_guard.cli digest check --root . --policy .agent-guard/digest-policy.yaml --json
+"$PYTHON_BIN" -m agent_guard.cli digest check --root . --policy .agent-guard/context-digest-policy.yaml --json
+"$PYTHON_BIN" -m agent_guard.cli workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
+"$PYTHON_BIN" -m agent_guard.cli drift check --root . --profile recommended --schema-version v2 --json
 "$PYTHON_BIN" -m agent_guard.cli report \
   --root . \
   --context-policy .agent-guard/context-policy.yaml \
-  --digest-policy .agent-guard/digest-policy.yaml \
+  --path-policy .agent-guard/path-policy.yaml \
+  --content-policy .agent-guard/content-policy.yaml \
+  --content-scan-dir . \
+  --api-policy .agent-guard/api-policy.yaml \
+  --digest-policy .agent-guard/context-digest-policy.yaml \
+  --workflow-policy .agent-guard/workflow-policy.yaml \
+  --drift-check \
+  --drift-schema-version v2 \
+  --surface-inventory-version v2 \
+  --conformance-profile recommended \
+  --evidence-pack-manifest \
   --format json \
   --output "$EVIDENCE_DIR/agent-guard-report.json"
+"$PYTHON_BIN" -m agent_guard.cli conformance check \
+  --root . \
+  --evidence "$EVIDENCE_DIR/agent-guard-report.json" \
+  --profile recommended \
+  --json
+"$PYTHON_BIN" -m agent_guard.cli evidence-pack manifest \
+  --root . \
+  --report "$EVIDENCE_DIR/agent-guard-report.json" \
+  --artifact "$EVIDENCE_DIR/policy-admission-event.json" \
+  --artifact "$EVIDENCE_DIR/agent-surface-inventory.json" \
+  --artifact "$EVIDENCE_DIR/agent-guard-report.json" \
+  --json \
+  > "$EVIDENCE_DIR/evidence-pack-manifest.json"
+"$PYTHON_BIN" examples/evidence_consumer.py "$EVIDENCE_DIR/agent-guard-report.json"

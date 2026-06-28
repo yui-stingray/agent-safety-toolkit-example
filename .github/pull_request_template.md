@@ -6,8 +6,9 @@ Describe the change and why it is needed.
 
 - [ ] `python -m pytest -q`
 - [ ] `bash scripts/run_demo.sh`
-- [ ] `agent-guard digest check --root . --policy .agent-guard/digest-policy.yaml`
-- [ ] `agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --digest-policy .agent-guard/digest-policy.yaml --format json`
+- [ ] `agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml`
+- [ ] `agent-guard conformance check --root . --evidence .agent-guard/evidence/agent-guard-report.json --profile recommended --json`
+- [ ] `python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json`
 
 ## Safety check
 

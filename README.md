@@ -19,6 +19,7 @@ For copying the pattern into another repository, use
 
 - reject unsafe agent context file instructions
 - emit redacted agent context inventory metadata for review evidence
+- emit agent surface inventory v2 metadata for documented guard commands and evidence artifacts
 - verify that discovered agent context files are pinned by digest policy
 - reject private artifact paths before publication
 - reject unsafe public-demo content patterns
@@ -76,14 +77,34 @@ The end-to-end script runs:
 - content guard
 - API guard
 - digest guard
-- sanitized JSON evidence report
+- workflow drift guard
+- policy/spec drift guard
+- recommended-profile conformance check
+- sanitized JSON evidence report and evidence-pack manifest
+- downstream evidence consumer validation
+
+The static guard portion is intentionally deterministic and can be inspected as
+these core commands:
+
+```bash
+agent-guard context check --root . --policy .agent-guard/context-policy.yaml --json
+agent-guard surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json
+agent-guard workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
+agent-guard drift check --root . --profile recommended --schema-version v2 --json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --path-policy .agent-guard/path-policy.yaml --content-policy .agent-guard/content-policy.yaml --content-scan-dir . --api-policy .agent-guard/api-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --workflow-policy .agent-guard/workflow-policy.yaml --drift-check --drift-schema-version v2 --surface-inventory-version v2 --conformance-profile recommended --evidence-pack-manifest --format json --output .agent-guard/evidence/agent-guard-report.json
+```
 
 It writes generated evidence files under `.agent-guard/evidence/`:
 
 - `policy-admission-event.json`: deterministic `agent-policy` runtime
   admission evidence for one normalized action.
+- `agent-surface-inventory.json`: sanitized `agent-guard` surface inventory v2
+  metadata for context files, policy files, workflows, documented guard
+  commands, and evidence artifacts.
 - `agent-guard-report.json`: sanitized `agent-guard` static repository
-  evidence, including context lock coverage.
+  evidence, including context lock coverage, workflow drift, profile
+  conformance, and an embedded evidence-pack manifest.
+- `evidence-pack-manifest.json`: compact artifact index for reviewer handoff.
 
 ## Updating Digests
 
@@ -98,9 +119,9 @@ After an intentional change to one of those files:
 
 ```bash
 python scripts/update_digests.py
-agent-guard digest check --root . --policy .agent-guard/digest-policy.yaml
-agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/digest-policy.yaml --json
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --digest-policy .agent-guard/digest-policy.yaml --format json --output .agent-guard/evidence/agent-guard-report.json
+agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml
+agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --path-policy .agent-guard/path-policy.yaml --content-policy .agent-guard/content-policy.yaml --content-scan-dir . --api-policy .agent-guard/api-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --workflow-policy .agent-guard/workflow-policy.yaml --drift-check --drift-schema-version v2 --surface-inventory-version v2 --conformance-profile recommended --evidence-pack-manifest --format json --output .agent-guard/evidence/agent-guard-report.json
 ```
 
 ## Public Safety Scope

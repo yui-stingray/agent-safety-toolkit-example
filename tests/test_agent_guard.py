@@ -11,6 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 ADOPTION_RECIPE = ROOT / "docs" / "adoption-recipe.md"
 PUBLISHING_CHECKLIST = ROOT / "docs" / "publishing-checklist.md"
+EVIDENCE_CONSUMER = ROOT / "examples" / "evidence_consumer.py"
 
 
 def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
@@ -23,11 +24,57 @@ def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
     )
 
 
+def full_report_args(*, output: Path | None = None) -> tuple[str, ...]:
+    args = [
+        "report",
+        "--root",
+        ".",
+        "--context-policy",
+        ".agent-guard/context-policy.yaml",
+        "--path-policy",
+        ".agent-guard/path-policy.yaml",
+        "--content-policy",
+        ".agent-guard/content-policy.yaml",
+        "--content-scan-dir",
+        ".",
+        "--api-policy",
+        ".agent-guard/api-policy.yaml",
+        "--digest-policy",
+        ".agent-guard/context-digest-policy.yaml",
+        "--workflow-policy",
+        ".agent-guard/workflow-policy.yaml",
+        "--drift-check",
+        "--drift-schema-version",
+        "v2",
+        "--surface-inventory-version",
+        "v2",
+        "--conformance-profile",
+        "recommended",
+        "--evidence-pack-manifest",
+        "--format",
+        "json",
+    ]
+    if output is not None:
+        args.extend(["--output", str(output)])
+    return tuple(args)
+
+
 @pytest.mark.parametrize(
     "args",
     [
         ("path", "check", "--root", ".", "--policy", ".agent-guard/path-policy.yaml", "--json"),
         ("context", "check", "--root", ".", "--policy", ".agent-guard/context-policy.yaml", "--json"),
+        (
+            "surface",
+            "inventory",
+            "--root",
+            ".",
+            "--context-policy",
+            ".agent-guard/context-policy.yaml",
+            "--schema-version",
+            "v2",
+            "--json",
+        ),
         (
             "context",
             "lock",
@@ -37,7 +84,7 @@ def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
             ".agent-guard/context-policy.yaml",
             "--check",
             "--digest-policy",
-            ".agent-guard/digest-policy.yaml",
+            ".agent-guard/context-digest-policy.yaml",
             "--json",
         ),
         (
@@ -56,6 +103,7 @@ def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
             "SECURITY.md",
             "CODE_OF_CONDUCT.md",
             "docs",
+            "examples",
             "scripts",
             "tests",
             ".github",
@@ -65,18 +113,10 @@ def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
             "--json",
         ),
         ("api", "check", "--root", ".", "--policy", ".agent-guard/api-policy.yaml", "--json"),
-        ("digest", "check", "--root", ".", "--policy", ".agent-guard/digest-policy.yaml", "--json"),
-        (
-            "report",
-            "--root",
-            ".",
-            "--context-policy",
-            ".agent-guard/context-policy.yaml",
-            "--digest-policy",
-            ".agent-guard/digest-policy.yaml",
-            "--format",
-            "json",
-        ),
+        ("digest", "check", "--root", ".", "--policy", ".agent-guard/context-digest-policy.yaml", "--json"),
+        ("workflow", "check", "--root", ".", "--policy", ".agent-guard/workflow-policy.yaml", "--json"),
+        ("drift", "check", "--root", ".", "--profile", "recommended", "--schema-version", "v2", "--json"),
+        full_report_args(),
     ],
 )
 def test_repo_guard_checks_are_clean(args: tuple[str, ...]) -> None:
@@ -119,10 +159,13 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "docs/adoption-recipe.md" in readme
     assert ".agent-policy/policy.toml" in recipe
     assert ".agent-guard/context-policy.yaml" in recipe
+    assert ".agent-guard/workflow-policy.yaml" in recipe
+    assert "examples/evidence_consumer.py" in recipe
     assert "scripts/policy_admit.py" in recipe
     assert "python3 scripts/update_digests.py" in recipe
     assert "python3 -m venv .venv" in recipe
-    assert "agent-guard report --root ." in recipe
+    assert "python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
+    assert "recommended-profile conformance" in readme
     assert "Do not copy or publish" in recipe
     assert "generated evidence from a private repository" in recipe
     assert "LLM reviewer" in recipe
@@ -131,17 +174,7 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
 
 
 def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
-    result = run_guard(
-        "report",
-        "--root",
-        ".",
-        "--context-policy",
-        ".agent-guard/context-policy.yaml",
-        "--digest-policy",
-        ".agent-guard/digest-policy.yaml",
-        "--format",
-        "json",
-    )
+    result = run_guard(*full_report_args())
 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
@@ -150,6 +183,13 @@ def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
     assert payload["report"]["schema_version"] == "agent-guard.report_evidence.v1"
     assert payload["report"]["format"] == "json"
     assert payload["report"]["sanitized"] is True
+    assert payload["surface_inventory"]["schema_version"] == "agent-guard.agent_surface_inventory.v2"
+    assert payload["policy_spec_drift"]["schema_version"] == "agent-guard.policy_spec_drift.v2"
+    assert payload["policy_spec_drift"]["profile"] == "recommended"
+    assert payload["conformance"]["schema_version"] == "agent-guard.conformance.v1"
+    assert payload["conformance"]["profile"] == "recommended"
+    assert payload["conformance"]["status"] == "ok"
+    assert payload["evidence_pack_manifest"]["schema_version"] == "agent-guard.evidence_pack_manifest.v1"
     assert payload["context_lock"]["status"] == "ok"
     assert payload["context_lock"]["covered_count"] == payload["context_lock"]["checked_count"]
     assert payload["context_lock"]["covered"] == [
@@ -171,31 +211,44 @@ def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
 
 def test_report_output_file_is_sanitized_and_repo_relative(tmp_path: Path) -> None:
     output = tmp_path / "evidence" / "agent-guard-report.json"
-    result = run_guard(
-        "report",
-        "--root",
-        ".",
-        "--context-policy",
-        ".agent-guard/context-policy.yaml",
-        "--digest-policy",
-        ".agent-guard/digest-policy.yaml",
-        "--format",
-        "json",
-        "--output",
-        str(output),
-    )
+    result = run_guard(*full_report_args(output=output))
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == ""
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "ok"
     assert payload["report"]["schema_version"] == "agent-guard.report_evidence.v1"
+    assert payload["surface_inventory"]["schema_version"] == "agent-guard.agent_surface_inventory.v2"
+    assert payload["conformance"]["status"] == "ok"
+    assert payload["evidence_pack_manifest"]["artifacts"] == [
+        {"path": "agent-guard-report.json", "role": "report"}
+    ]
     assert payload["context_lock"]["covered_count"] == 1
     serialized = json.dumps(payload, sort_keys=True)
     assert str(ROOT) not in serialized
     assert "Shell, filesystem write" not in serialized
     assert "snippet" not in serialized
     assert "matched_text" not in serialized
+
+
+def test_evidence_consumer_accepts_recommended_report(tmp_path: Path) -> None:
+    output = tmp_path / "evidence" / "agent-guard-report.json"
+    report = run_guard(*full_report_args(output=output))
+    assert report.returncode == 0, report.stdout + report.stderr
+
+    result = subprocess.run(
+        [sys.executable, str(EVIDENCE_CONSUMER), str(output)],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads(result.stdout)
+    assert summary["status"] == "ok"
+    assert summary["conformance_status"] == "ok"
+    assert summary["enabled_gate_count"] >= 6
 
 
 def test_context_inventory_does_not_emit_raw_sensitive_context(tmp_path: Path) -> None:

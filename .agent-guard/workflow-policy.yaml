@@ -1,0 +1,28 @@
+# Where: .agent-guard/workflow-policy.yaml
+# What: demo workflow guard policy for agent safety evidence.
+# Why: keep CI aligned with the public demo's deterministic guard workflow.
+
+schema_version: agent-guard.workflow_policy.v1
+
+required_files:
+  - id: context_policy
+    path: .agent-guard/context-policy.yaml
+  - id: path_policy
+    path: .agent-guard/path-policy.yaml
+  - id: content_policy
+    path: .agent-guard/content-policy.yaml
+  - id: workflow_policy
+    path: .agent-guard/workflow-policy.yaml
+  - id: context_digest_policy
+    path: .agent-guard/context-digest-policy.yaml
+
+workflow_checks:
+  - id: ci_demo_evidence
+    path: .github/workflows/ci.yml
+    required_commands:
+      - id: test_suite
+        command: python -m pytest -q
+      - id: surface_inventory_workflow
+        command: python -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2
+      - id: demo_script
+        command: bash scripts/run_demo.sh
