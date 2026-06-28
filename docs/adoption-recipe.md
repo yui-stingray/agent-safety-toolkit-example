@@ -83,7 +83,8 @@ logic, or CI guard commands, review:
 
 - the `agent-policy` runtime admission decision or audit event;
 - the `agent-guard` context inventory and context lock coverage;
-- the `agent-guard` surface inventory v2 and evidence-pack manifest;
+- the `agent-guard` surface inventory v2 and evidence-pack manifest, including
+  a sanitized `agent-policy` audit-event artifact reference;
 - the recommended-profile conformance result;
 - digest drift for pinned safety-critical files;
 - workflow drift for required guard commands;

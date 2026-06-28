@@ -91,7 +91,7 @@ agent-guard context check --root . --policy .agent-guard/context-policy.yaml --j
 agent-guard surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json
 agent-guard workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
 agent-guard drift check --root . --profile recommended --schema-version v2 --json
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --path-policy .agent-guard/path-policy.yaml --content-policy .agent-guard/content-policy.yaml --content-scan-dir . --api-policy .agent-guard/api-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --workflow-policy .agent-guard/workflow-policy.yaml --drift-check --drift-schema-version v2 --surface-inventory-version v2 --conformance-profile recommended --evidence-pack-manifest --format json --output .agent-guard/evidence/agent-guard-report.json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
 ```
 
 It writes generated evidence files under `.agent-guard/evidence/`:
@@ -103,8 +103,10 @@ It writes generated evidence files under `.agent-guard/evidence/`:
   commands, and evidence artifacts.
 - `agent-guard-report.json`: sanitized `agent-guard` static repository
   evidence, including context lock coverage, workflow drift, profile
-  conformance, and an embedded evidence-pack manifest.
-- `evidence-pack-manifest.json`: compact artifact index for reviewer handoff.
+  conformance, and an embedded evidence-pack manifest with a sanitized
+  `agent-policy` audit-event artifact reference.
+- `evidence-pack-manifest.json`: compact artifact index for reviewer handoff,
+  including the report and `agent-policy` audit-event artifact references.
 
 ## Updating Digests
 
@@ -121,7 +123,7 @@ After an intentional change to one of those files:
 python scripts/update_digests.py
 agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml
 agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --path-policy .agent-guard/path-policy.yaml --content-policy .agent-guard/content-policy.yaml --content-scan-dir . --api-policy .agent-guard/api-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --workflow-policy .agent-guard/workflow-policy.yaml --drift-check --drift-schema-version v2 --surface-inventory-version v2 --conformance-profile recommended --evidence-pack-manifest --format json --output .agent-guard/evidence/agent-guard-report.json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
 ```
 
 ## Public Safety Scope

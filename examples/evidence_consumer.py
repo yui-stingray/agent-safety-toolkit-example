@@ -88,6 +88,10 @@ def validate_report(payload: dict[str, Any], schema: dict[str, Any]) -> dict[str
         "evidence pack manifest schema mismatch",
     )
     require(manifest.get("sanitized") is True, "evidence pack manifest must be sanitized")
+    artifacts = manifest.get("artifacts")
+    require(isinstance(artifacts, list), "evidence_pack_manifest.artifacts must be an array")
+    artifact_roles = {item.get("role") for item in artifacts if isinstance(item, dict)}
+    require("agent-policy-audit-event" in artifact_roles, "agent-policy audit-event artifact reference is missing")
 
     serialized = json.dumps(payload, sort_keys=True)
     for fragment in FORBIDDEN_FRAGMENTS:

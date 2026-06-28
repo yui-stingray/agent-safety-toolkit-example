@@ -31,26 +31,14 @@ def full_report_args(*, output: Path | None = None) -> tuple[str, ...]:
         ".",
         "--context-policy",
         ".agent-guard/context-policy.yaml",
-        "--path-policy",
-        ".agent-guard/path-policy.yaml",
-        "--content-policy",
-        ".agent-guard/content-policy.yaml",
-        "--content-scan-dir",
-        ".",
+        "--evidence-preset",
+        "recommended",
         "--api-policy",
         ".agent-guard/api-policy.yaml",
         "--digest-policy",
         ".agent-guard/context-digest-policy.yaml",
-        "--workflow-policy",
-        ".agent-guard/workflow-policy.yaml",
-        "--drift-check",
-        "--drift-schema-version",
-        "v2",
-        "--surface-inventory-version",
-        "v2",
-        "--conformance-profile",
-        "recommended",
-        "--evidence-pack-manifest",
+        "--agent-policy-audit-event",
+        ".agent-guard/evidence/policy-admission-event.json",
         "--format",
         "json",
     ]
@@ -166,6 +154,9 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "python3 -m venv .venv" in recipe
     assert "python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
     assert "recommended-profile conformance" in readme
+    assert "--evidence-preset recommended" in readme
+    assert "--agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json" in readme
+    assert "agent-policy` audit-event artifact reference" in recipe
     assert "Do not copy or publish" in recipe
     assert "generated evidence from a private repository" in recipe
     assert "LLM reviewer" in recipe
@@ -190,6 +181,8 @@ def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
     assert payload["conformance"]["profile"] == "recommended"
     assert payload["conformance"]["status"] == "ok"
     assert payload["evidence_pack_manifest"]["schema_version"] == "agent-guard.evidence_pack_manifest.v1"
+    artifact_roles = {item["role"] for item in payload["evidence_pack_manifest"]["artifacts"]}
+    assert "agent-policy-audit-event" in artifact_roles
     assert payload["context_lock"]["status"] == "ok"
     assert payload["context_lock"]["covered_count"] == payload["context_lock"]["checked_count"]
     assert payload["context_lock"]["covered"] == [
@@ -221,7 +214,8 @@ def test_report_output_file_is_sanitized_and_repo_relative(tmp_path: Path) -> No
     assert payload["surface_inventory"]["schema_version"] == "agent-guard.agent_surface_inventory.v2"
     assert payload["conformance"]["status"] == "ok"
     assert payload["evidence_pack_manifest"]["artifacts"] == [
-        {"path": "agent-guard-report.json", "role": "report"}
+        {"path": "agent-guard-report.json", "role": "report"},
+        {"path": ".agent-guard/evidence/policy-admission-event.json", "role": "agent-policy-audit-event"},
     ]
     assert payload["context_lock"]["covered_count"] == 1
     serialized = json.dumps(payload, sort_keys=True)

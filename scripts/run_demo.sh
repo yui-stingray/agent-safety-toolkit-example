@@ -106,17 +106,10 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
 "$PYTHON_BIN" -m agent_guard.cli report \
   --root . \
   --context-policy .agent-guard/context-policy.yaml \
-  --path-policy .agent-guard/path-policy.yaml \
-  --content-policy .agent-guard/content-policy.yaml \
-  --content-scan-dir . \
+  --evidence-preset recommended \
   --api-policy .agent-guard/api-policy.yaml \
   --digest-policy .agent-guard/context-digest-policy.yaml \
-  --workflow-policy .agent-guard/workflow-policy.yaml \
-  --drift-check \
-  --drift-schema-version v2 \
-  --surface-inventory-version v2 \
-  --conformance-profile recommended \
-  --evidence-pack-manifest \
+  --agent-policy-audit-event "$EVIDENCE_DIR/policy-admission-event.json" \
   --format json \
   --output "$EVIDENCE_DIR/agent-guard-report.json"
 "$PYTHON_BIN" -m agent_guard.cli conformance check \
@@ -127,9 +120,9 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
 "$PYTHON_BIN" -m agent_guard.cli evidence-pack manifest \
   --root . \
   --report "$EVIDENCE_DIR/agent-guard-report.json" \
-  --artifact "$EVIDENCE_DIR/policy-admission-event.json" \
   --artifact "$EVIDENCE_DIR/agent-surface-inventory.json" \
   --artifact "$EVIDENCE_DIR/agent-guard-report.json" \
+  --agent-policy-audit-event "$EVIDENCE_DIR/policy-admission-event.json" \
   --json \
   > "$EVIDENCE_DIR/evidence-pack-manifest.json"
 "$PYTHON_BIN" examples/evidence_consumer.py "$EVIDENCE_DIR/agent-guard-report.json"
