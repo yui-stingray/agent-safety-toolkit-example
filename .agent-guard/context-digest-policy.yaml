@@ -5,10 +5,10 @@ checks:
     sha256: 1836da432c9a190aa0d086ec8e45fe7733fdaf0ba592d5f2949849a81346e863
   - id: readme
     path: README.md
-    sha256: 943088b700899814fc9a3d2b5ba62fe0f8b42e58cd1b950bd01082b9868eea64
+    sha256: 8da58cb1cea512bbe7cb2406c2813c75ad9267c4d327e8ef27306519bcabd636
   - id: policy_wrapper
     path: scripts/policy_admit.py
-    sha256: 1d361f68e45059c1e2d4b8a6bf201a8967908f3755964d56ec22d2ebb7a64fc7
+    sha256: 46d2dc421e189bb7b2b58b05ce401da6a19ba89d82edb2a6b56017f93dc1be37
   - id: policy_matrix
     path: .agent-policy/policy.toml
     sha256: e42f02913dfa5cf2c97c4c744607fd1af7ba92797ca20aa76acc8a4edfd6faa5

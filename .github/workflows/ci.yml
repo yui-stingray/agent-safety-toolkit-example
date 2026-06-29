@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   safety-demo:
-    name: Safety toolkit demo
+    name: Safety evidence demo
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,6 +23,8 @@ jobs:
         with:
           python-version: "3.12"
 
+      # actions/setup-python exposes the selected 3.12 runtime as `python`.
+      # The current locked agent-guard release recognizes this form in workflow evidence.
       - name: Install locked dependencies
         run: python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
 

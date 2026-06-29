@@ -1,8 +1,12 @@
-# Agent Safety Toolkit Example
+# Agent Safety Evidence Demo
 
-This repository is a public-safe demo of using [`agent-policy`](https://github.com/yui-stingray/agent-policy) and [`agent-guard`](https://github.com/yui-stingray/agent-guard) together as an agent safety toolkit.
+This repository is a public-safe demo for one narrow handoff: static
+repository evidence from [`agent-guard`](https://github.com/yui-stingray/agent-guard)
+plus a deterministic admission artifact from
+[`agent-policy`](https://github.com/yui-stingray/agent-policy).
 
-It shows how the two projects can be dogfooded in a repository that is safe to publish.
+It is not a comprehensive agent safety toolkit. It shows a publishable evidence
+shape that maintainers can inspect, copy, and adapt.
 For copying the pattern into another repository, use
 [`docs/adoption-recipe.md`](docs/adoption-recipe.md).
 
@@ -46,13 +50,13 @@ The wrapper in `scripts/policy_admit.py` deliberately keeps action parsing small
 Run a single admission check:
 
 ```bash
-python scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-safety-toolkit-example
+python3 scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-safety-toolkit-example
 ```
 
 Emit the deterministic audit event shape used by wrappers and CI:
 
 ```bash
-python scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-safety-toolkit-example --audit-event --command read_docs --path README.md
+python3 scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-safety-toolkit-example --audit-event --command read_docs --path README.md
 ```
 
 ## Local Verification
@@ -60,10 +64,10 @@ python scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-safe
 This demo pins dependencies with hashes for Python 3.12 on Ubuntu Linux, which is also the CI target.
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
-python -m pytest -q
+python3 -m pip install --require-hashes -r requirements/agent-safety-tools.txt
+python3 -m pytest -q
 bash scripts/run_demo.sh
 ```
 
@@ -120,7 +124,7 @@ The digest policy pins files that define the public demo contract:
 After an intentional change to one of those files:
 
 ```bash
-python scripts/update_digests.py
+python3 scripts/update_digests.py
 agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml
 agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
 agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json

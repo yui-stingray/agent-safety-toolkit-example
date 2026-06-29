@@ -6,10 +6,10 @@ cd "$ROOT"
 
 if [ -n "${PYTHON:-}" ]; then
   PYTHON_BIN="$PYTHON"
-elif command -v python >/dev/null 2>&1; then
-  PYTHON_BIN="python"
-else
+elif command -v python3 >/dev/null 2>&1; then
   PYTHON_BIN="python3"
+else
+  PYTHON_BIN="python"
 fi
 
 CONTENT_TARGETS=(

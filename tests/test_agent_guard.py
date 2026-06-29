@@ -11,6 +11,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 ADOPTION_RECIPE = ROOT / "docs" / "adoption-recipe.md"
 PUBLISHING_CHECKLIST = ROOT / "docs" / "publishing-checklist.md"
+PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 EVIDENCE_CONSUMER = ROOT / "examples" / "evidence_consumer.py"
 
 
@@ -143,6 +145,8 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     recipe = ADOPTION_RECIPE.read_text(encoding="utf-8")
     checklist = PUBLISHING_CHECKLIST.read_text(encoding="utf-8")
+    pr_template = PR_TEMPLATE.read_text(encoding="utf-8")
+    ci_workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
     assert "docs/adoption-recipe.md" in readme
     assert ".agent-policy/policy.toml" in recipe
@@ -152,7 +156,7 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "scripts/policy_admit.py" in recipe
     assert "python3 scripts/update_digests.py" in recipe
     assert "python3 -m venv .venv" in recipe
-    assert "python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
+    assert "python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
     assert "recommended-profile conformance" in readme
     assert "--evidence-preset recommended" in readme
     assert "--agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json" in readme
@@ -162,6 +166,12 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "LLM reviewer" in recipe
     assert "model router" in recipe
     assert "de-personalized" in checklist
+    assert "python3 -m pytest -q" in pr_template
+    assert "python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in pr_template
+    assert 'python-version: "3.12"' in ci_workflow
+    assert "actions/setup-python exposes the selected 3.12 runtime as `python`" in ci_workflow
+    assert "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt" in ci_workflow
+    assert "python -m agent_guard.cli surface inventory" in ci_workflow
 
 
 def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:

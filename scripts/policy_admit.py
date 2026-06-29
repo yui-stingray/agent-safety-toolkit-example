@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime admission wrapper for the agent safety toolkit demo."""
+"""Runtime admission wrapper for the safety evidence demo."""
 
 from __future__ import annotations
 

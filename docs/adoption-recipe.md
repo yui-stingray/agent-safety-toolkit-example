@@ -53,10 +53,10 @@ Run the same checks locally before enabling the workflow:
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
-python -m pytest -q
+python3 -m pip install --require-hashes -r requirements/agent-safety-tools.txt
+python3 -m pytest -q
 bash scripts/run_demo.sh
-python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json
+python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json
 ```
 
 If dependency hashes do not match on the target platform, regenerate the lock
@@ -92,4 +92,5 @@ logic, or CI guard commands, review:
   local paths.
 
 This recipe is deliberately narrow. It does not add an LLM reviewer, issue
-triage bot, model router, broad secret scanner, or governance framework.
+triage bot, model router, broad secret scanner, agent execution UI, MCP runtime
+security layer, or governance framework.
