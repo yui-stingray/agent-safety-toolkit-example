@@ -110,6 +110,7 @@ def test_contributing_uses_current_context_digest_policy_name() -> None:
             "--json",
         ),
         ("api", "check", "--root", ".", "--policy", ".agent-guard/api-policy.yaml", "--json"),
+        ("mcp", "check", "--root", ".", "--json"),
         ("digest", "check", "--root", ".", "--policy", ".agent-guard/context-digest-policy.yaml", "--json"),
         ("workflow", "check", "--root", ".", "--policy", ".agent-guard/workflow-policy.yaml", "--json"),
         ("drift", "check", "--root", ".", "--profile", "recommended", "--schema-version", "v2", "--json"),
@@ -166,6 +167,7 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
     assert "recommended-profile conformance" in readme
     assert "--evidence-preset recommended" in readme
+    assert "agent-guard mcp check --root . --json" in readme
     assert "--agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json" in readme
     assert "agent-policy` audit-event artifact reference" in recipe
     assert "Do not copy or publish" in recipe

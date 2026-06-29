@@ -80,6 +80,7 @@ The end-to-end script runs:
 - context lock coverage against the committed digest policy
 - content guard
 - API guard
+- MCP config guard
 - digest guard
 - workflow drift guard
 - policy/spec drift guard
@@ -93,6 +94,7 @@ these core commands:
 ```bash
 agent-guard context check --root . --policy .agent-guard/context-policy.yaml --json
 agent-guard surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json
+agent-guard mcp check --root . --json
 agent-guard workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
 agent-guard drift check --root . --profile recommended --schema-version v2 --json
 agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
