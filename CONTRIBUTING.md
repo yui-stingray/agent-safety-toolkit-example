@@ -18,9 +18,9 @@ lock coverage:
 
 ```bash
 python scripts/update_digests.py
-agent-guard digest check --root . --policy .agent-guard/digest-policy.yaml
-agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/digest-policy.yaml --json
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --digest-policy .agent-guard/digest-policy.yaml --format json
+agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml
+agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --format json
 ```
 
 ## Review Expectations

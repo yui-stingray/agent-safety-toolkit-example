@@ -49,6 +49,13 @@ def full_report_args(*, output: Path | None = None) -> tuple[str, ...]:
     return tuple(args)
 
 
+def test_contributing_uses_current_context_digest_policy_name() -> None:
+    contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+
+    assert ".agent-guard/context-digest-policy.yaml" in contributing
+    assert ".agent-guard/digest-policy.yaml" not in contributing
+
+
 @pytest.mark.parametrize(
     "args",
     [
