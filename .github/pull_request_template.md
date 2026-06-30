@@ -6,6 +6,7 @@ Describe the change and why it is needed.
 
 - [ ] `python3 -m pytest -q`
 - [ ] `bash scripts/run_demo.sh`
+- [ ] `agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json`
 - [ ] `agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml`
 - [ ] `agent-guard conformance check --root . --evidence .agent-guard/evidence/agent-guard-report.json --profile recommended --json`
 - [ ] `python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json`

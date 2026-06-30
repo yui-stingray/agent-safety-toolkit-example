@@ -13,6 +13,7 @@ Start with these files:
 - `.agent-guard/content-policy.yaml`
 - `.agent-guard/context-policy.yaml`
 - `.agent-guard/context-digest-policy.yaml`
+- `.agent-guard/mcp-policy.yaml`
 - `.agent-guard/path-policy.yaml`
 - `.agent-guard/workflow-policy.yaml`
 - `examples/evidence_consumer.py`
@@ -33,6 +34,7 @@ Replace the demo-specific values before linking the repository publicly:
 - the action-to-capability map in `scripts/policy_admit.py`;
 - the capability matrix in `.agent-policy/policy.toml`;
 - content scan targets in `.agent-guard/content-policy.yaml`;
+- static MCP config risk labels in `.agent-guard/mcp-policy.yaml`;
 - API allow/deny rules in `.agent-guard/api-policy.yaml`;
 - path rules for local artifacts, generated outputs, and private fixtures;
 - branch names and workflow names in `.github/workflows/ci.yml`;

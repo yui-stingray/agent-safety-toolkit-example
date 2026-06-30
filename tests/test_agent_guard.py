@@ -37,6 +37,8 @@ def full_report_args(*, output: Path | None = None) -> tuple[str, ...]:
         "recommended",
         "--api-policy",
         ".agent-guard/api-policy.yaml",
+        "--mcp-policy",
+        ".agent-guard/mcp-policy.yaml",
         "--digest-policy",
         ".agent-guard/context-digest-policy.yaml",
         "--agent-policy-audit-event",
@@ -110,7 +112,7 @@ def test_contributing_uses_current_context_digest_policy_name() -> None:
             "--json",
         ),
         ("api", "check", "--root", ".", "--policy", ".agent-guard/api-policy.yaml", "--json"),
-        ("mcp", "check", "--root", ".", "--json"),
+        ("mcp", "check", "--root", ".", "--policy", ".agent-guard/mcp-policy.yaml", "--json"),
         ("digest", "check", "--root", ".", "--policy", ".agent-guard/context-digest-policy.yaml", "--json"),
         ("workflow", "check", "--root", ".", "--policy", ".agent-guard/workflow-policy.yaml", "--json"),
         ("drift", "check", "--root", ".", "--profile", "recommended", "--schema-version", "v2", "--json"),
@@ -159,6 +161,7 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "docs/adoption-recipe.md" in readme
     assert ".agent-policy/policy.toml" in recipe
     assert ".agent-guard/context-policy.yaml" in recipe
+    assert ".agent-guard/mcp-policy.yaml" in recipe
     assert ".agent-guard/workflow-policy.yaml" in recipe
     assert "examples/evidence_consumer.py" in recipe
     assert "scripts/policy_admit.py" in recipe
@@ -167,7 +170,8 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
     assert "recommended-profile conformance" in readme
     assert "--evidence-preset recommended" in readme
-    assert "agent-guard mcp check --root . --json" in readme
+    assert "agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json" in readme
+    assert "--mcp-policy .agent-guard/mcp-policy.yaml" in readme
     assert "--agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json" in readme
     assert "raw scanner" in readme
     assert "JSON from a private repository" in readme
@@ -208,6 +212,7 @@ def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
     assert payload["conformance"]["schema_version"] == "agent-guard.conformance.v1"
     assert payload["conformance"]["profile"] == "recommended"
     assert payload["conformance"]["status"] == "ok"
+    assert payload["mcp_config"]["policy"]["path"] == ".agent-guard/mcp-policy.yaml"
     assert payload["evidence_pack_manifest"]["schema_version"] == "agent-guard.evidence_pack_manifest.v1"
     artifact_roles = {item["role"] for item in payload["evidence_pack_manifest"]["artifacts"]}
     assert "agent-policy-audit-event" in artifact_roles
@@ -241,6 +246,7 @@ def test_report_output_file_is_sanitized_and_repo_relative(tmp_path: Path) -> No
     assert payload["report"]["schema_version"] == "agent-guard.report_evidence.v1"
     assert payload["surface_inventory"]["schema_version"] == "agent-guard.agent_surface_inventory.v2"
     assert payload["conformance"]["status"] == "ok"
+    assert payload["mcp_config"]["policy"]["path"] == ".agent-guard/mcp-policy.yaml"
     assert payload["evidence_pack_manifest"]["artifacts"] == [
         {"path": "agent-guard-report.json", "role": "report"},
         {"path": ".agent-guard/evidence/policy-admission-event.json", "role": "agent-policy-audit-event"},

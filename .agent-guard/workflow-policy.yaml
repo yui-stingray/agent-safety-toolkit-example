@@ -13,6 +13,8 @@ required_files:
     path: .agent-guard/content-policy.yaml
   - id: workflow_policy
     path: .agent-guard/workflow-policy.yaml
+  - id: mcp_policy
+    path: .agent-guard/mcp-policy.yaml
   - id: context_digest_policy
     path: .agent-guard/context-digest-policy.yaml
 

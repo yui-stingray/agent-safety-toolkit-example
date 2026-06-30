@@ -5,13 +5,16 @@ checks:
     sha256: 1836da432c9a190aa0d086ec8e45fe7733fdaf0ba592d5f2949849a81346e863
   - id: readme
     path: README.md
-    sha256: c065cea90b63136c514b4a3ae1b2021240e0272d28631257146e1068520ee832
+    sha256: 94dd377b6c57d1a195cbee1571985aaea4aa4ddf5bf89bf74d822bd92d1aed0b
   - id: policy_wrapper
     path: scripts/policy_admit.py
     sha256: 46d2dc421e189bb7b2b58b05ce401da6a19ba89d82edb2a6b56017f93dc1be37
   - id: policy_matrix
     path: .agent-policy/policy.toml
     sha256: e42f02913dfa5cf2c97c4c744607fd1af7ba92797ca20aa76acc8a4edfd6faa5
+  - id: mcp_policy
+    path: .agent-guard/mcp-policy.yaml
+    sha256: 554100e32f43f9f35ba18713899f24693737f086755eb5b2fb059ed45f67770b
   - id: workflow_policy
     path: .agent-guard/workflow-policy.yaml
-    sha256: 983c290c6d4d96e328b5d6cfa6f2c3fc51c8d585c9c9254fd7263f58ff6e9df2
+    sha256: a0929d4a2e111712096b9837b5ef38269d7d2eaa657d1043b1217ce3745ed357

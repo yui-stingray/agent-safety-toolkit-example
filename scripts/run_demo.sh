@@ -100,7 +100,7 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --targets "${CONTENT_TARGETS[@]}" \
   --json
 "$PYTHON_BIN" -m agent_guard.cli api check --root . --policy .agent-guard/api-policy.yaml --json
-"$PYTHON_BIN" -m agent_guard.cli mcp check --root . --json
+"$PYTHON_BIN" -m agent_guard.cli mcp check --root . --policy .agent-guard/mcp-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli digest check --root . --policy .agent-guard/context-digest-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli drift check --root . --profile recommended --schema-version v2 --json
@@ -109,6 +109,7 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --context-policy .agent-guard/context-policy.yaml \
   --evidence-preset recommended \
   --api-policy .agent-guard/api-policy.yaml \
+  --mcp-policy .agent-guard/mcp-policy.yaml \
   --digest-policy .agent-guard/context-digest-policy.yaml \
   --agent-policy-audit-event "$EVIDENCE_DIR/policy-admission-event.json" \
   --format json \
