@@ -71,6 +71,8 @@ Do not copy or publish:
 - private corpora, bypass corpora, red-team transcripts, or personal notes;
 - generated evidence from a private repository unless it has been reviewed and
   is known to be sanitized;
+- raw per-scanner JSON from a private repository unless a maintainer has
+  reviewed that exact output;
 - hook config with personal absolute paths.
 
 The committed demo evidence is generated for this public-safe repository. Treat
@@ -93,4 +95,5 @@ logic, or CI guard commands, review:
 
 This recipe is deliberately narrow. It does not add an LLM reviewer, issue
 triage bot, model router, broad secret scanner, agent execution UI, MCP runtime
-security layer, or governance framework.
+security layer, live OAuth validator, MCP tool-poisoning detector, or governance
+framework.

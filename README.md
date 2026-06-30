@@ -100,6 +100,14 @@ agent-guard drift check --root . --profile recommended --schema-version v2 --jso
 agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
 ```
 
+Treat the individual per-scanner `--json` outputs above as local inspection or
+CI-internal diagnostics. The public handoff is the sanitized report and
+evidence-pack output under `.agent-guard/evidence/`; do not upload raw scanner
+JSON from a private repository unless a maintainer has reviewed that exact
+output. The MCP config guard reads committed configuration metadata only. It
+does not execute MCP servers, validate live OAuth flows, inspect MCP tool
+results, or detect MCP tool-poisoning behavior.
+
 It writes generated evidence files under `.agent-guard/evidence/`:
 
 - `policy-admission-event.json`: deterministic `agent-policy` runtime

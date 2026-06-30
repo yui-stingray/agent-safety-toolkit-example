@@ -8,6 +8,7 @@ Use this checklist before making a demo repository public or before linking it f
 - CI has read-only repository permissions.
 - GitHub Actions are pinned to commit SHAs.
 - Dependencies are exact and hash-pinned.
+- Public evidence handoffs do not include raw per-scanner JSON from a private repository.
 - Negative fixtures are generated during tests, not committed as payload files.
 - Safety-critical digests were regenerated after the final content change.
 - The adoption recipe has been de-personalized before linking or publishing.

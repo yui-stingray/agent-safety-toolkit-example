@@ -169,14 +169,23 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "--evidence-preset recommended" in readme
     assert "agent-guard mcp check --root . --json" in readme
     assert "--agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json" in readme
+    assert "raw scanner" in readme
+    assert "JSON from a private repository" in readme
+    assert "validate live OAuth flows" in readme
+    assert "MCP tool-poisoning behavior" in readme
     assert "agent-policy` audit-event artifact reference" in recipe
     assert "Do not copy or publish" in recipe
+    assert "raw per-scanner JSON from a private repository" in recipe
+    assert "live OAuth validator" in recipe
     assert "generated evidence from a private repository" in recipe
     assert "LLM reviewer" in recipe
     assert "model router" in recipe
     assert "de-personalized" in checklist
+    assert "Public evidence handoffs do not include raw per-scanner JSON" in checklist
     assert "python3 -m pytest -q" in pr_template
     assert "python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in pr_template
+    assert "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7" in ci_workflow
+    assert "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6" not in ci_workflow
     assert 'python-version: "3.12"' in ci_workflow
     assert "actions/setup-python exposes the selected 3.12 runtime as `python`" in ci_workflow
     assert "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt" in ci_workflow
