@@ -419,7 +419,11 @@ def test_api_guard_rejects_forbidden_endpoint(tmp_path: Path) -> None:
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert payload["status"] == "violation"
-    assert payload["findings"][0]["matched_forbidden_pattern"] == "^https://api\\.openai\\.com/"
+    finding = payload["findings"][0]
+    assert finding["category"] == "forbidden_api"
+    assert finding["path"] == "docs/integration.md"
+    assert "matched_forbidden_pattern" not in finding
+    assert "https://api." + "openai.com/" not in result.stdout
 
 
 def test_digest_guard_rejects_modified_pinned_content(tmp_path: Path) -> None:

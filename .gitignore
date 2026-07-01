@@ -10,4 +10,8 @@ dist/
 !.env.example
 artifacts/private/
 artifacts/local/
-.agent-guard/evidence/
+.agent-guard/evidence/*
+!.agent-guard/evidence/agent-guard-report.json
+!.agent-guard/evidence/agent-surface-inventory.json
+!.agent-guard/evidence/evidence-pack-manifest.json
+!.agent-guard/evidence/policy-admission-event.json

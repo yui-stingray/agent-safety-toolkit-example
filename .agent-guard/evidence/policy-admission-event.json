@@ -1,0 +1,1 @@
+{"capability": "read", "command": "read_docs", "context": {"ownership_class": "internal"}, "decision": {"matched_repo": "yui-stingray/agent-safety-toolkit-example", "mode": "auto_allow", "reason": "repo_policy"}, "path": "README.md", "repo": "yui-stingray/agent-safety-toolkit-example"}
