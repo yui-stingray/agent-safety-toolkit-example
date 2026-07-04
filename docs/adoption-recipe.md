@@ -31,6 +31,8 @@ has a specific reason to write.
 Replace the demo-specific values before linking the repository publicly:
 
 - repository identifiers such as `yui-stingray/agent-safety-toolkit-example`;
+- public audit-event aliases passed as `--repo-alias` when raw repository names
+  should not appear in evidence;
 - the action-to-capability map in `scripts/policy_admit.py`;
 - the capability matrix in `.agent-policy/policy.toml`;
 - content scan targets in `.agent-guard/content-policy.yaml`;
@@ -73,6 +75,8 @@ Do not copy or publish:
 - private corpora, bypass corpora, red-team transcripts, or personal notes;
 - generated evidence from a private repository unless it has been reviewed and
   is known to be sanitized;
+- `agent-policy` audit events created without a public-safe `--repo-alias`
+  when the raw repository identifier is private;
 - raw per-scanner JSON from a private repository unless a maintainer has
   reviewed that exact output;
 - hook config with personal absolute paths.
@@ -89,6 +93,9 @@ logic, or CI guard commands, review:
 - the `agent-guard` context inventory and context lock coverage;
 - the `agent-guard` surface inventory v2 and evidence-pack manifest, including
   a sanitized `agent-policy` audit-event artifact reference;
+- whether `agent-surface-inventory.json` is listed as a generic `report`
+  artifact by the pinned `agent-guard` release, and whether the path plus
+  embedded `surface_inventory` section are sufficient for the handoff;
 - the recommended-profile conformance result;
 - digest drift for pinned safety-critical files;
 - workflow drift for required guard commands;

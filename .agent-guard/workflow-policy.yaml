@@ -22,9 +22,13 @@ workflow_checks:
   - id: ci_demo_evidence
     path: .github/workflows/ci.yml
     required_commands:
+      - id: dependency_download_check
+        command: /tmp/agent-safety-download-check/bin/python -m pip download --index-url https://pypi.org/simple --no-deps --require-hashes -r requirements/agent-safety-tools.txt --dest /tmp/agent-safety-downloads
       - id: test_suite
         command: python -m pytest -q
       - id: surface_inventory_workflow
         command: python -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2
       - id: demo_script
         command: bash scripts/run_demo.sh
+      - id: evidence_freshness
+        command: git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json .agent-guard/evidence/agent-surface-inventory.json .agent-guard/evidence/evidence-pack-manifest.json .agent-guard/evidence/policy-admission-event.json

@@ -25,6 +25,11 @@ jobs:
 
       # actions/setup-python exposes the selected 3.12 runtime as `python`.
       # The current locked agent-guard release recognizes this form in workflow evidence.
+      - name: Verify locked dependencies resolve from public PyPI
+        run: |
+          python -m venv /tmp/agent-safety-download-check
+          /tmp/agent-safety-download-check/bin/python -m pip download --index-url https://pypi.org/simple --no-deps --require-hashes -r requirements/agent-safety-tools.txt --dest /tmp/agent-safety-downloads
+
       - name: Install locked dependencies
         run: python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
 
@@ -36,3 +41,6 @@ jobs:
 
       - name: Run end-to-end demo
         run: bash scripts/run_demo.sh
+
+      - name: Verify committed evidence samples are current
+        run: git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json .agent-guard/evidence/agent-surface-inventory.json .agent-guard/evidence/evidence-pack-manifest.json .agent-guard/evidence/policy-admission-event.json

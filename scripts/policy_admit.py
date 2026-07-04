@@ -10,7 +10,7 @@ import sys
 from pathlib import Path, PureWindowsPath
 from typing import Final
 
-from agent_policy import audit_event_to_json, build_audit_event, evaluate, load_policy_file
+from agent_policy import PolicyDecision, audit_event_to_json, build_audit_event, evaluate, load_policy_file
 
 DEFAULT_REPO: Final = "yui-stingray/agent-safety-toolkit-example"
 DEFAULT_POLICY: Final = ".agent-policy/policy.toml"
@@ -22,6 +22,7 @@ ACTION_CAPABILITIES: Final[dict[str, str]] = {
     "force_push": "push.force",
 }
 SAFE_LABEL_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$")
+SAFE_REPO_ALIAS_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 SAFE_REPO_PATH_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
 WINDOWS_DRIVE_RE: Final = re.compile(r"^[A-Za-z]:[\\/]")
 SECRETISH_RE: Final = re.compile(
@@ -39,6 +40,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="evaluate a normalized demo action")
     parser.add_argument("--policy", default=DEFAULT_POLICY, help="path to agent-policy TOML")
     parser.add_argument("--repo", default=DEFAULT_REPO, help="repository identifier")
+    parser.add_argument(
+        "--repo-alias",
+        default=None,
+        help="optional public-safe repository slug emitted in audit events; policy matching still uses --repo",
+    )
     parser.add_argument("--action", required=True, choices=sorted(ACTION_CAPABILITIES), help="demo action")
     parser.add_argument(
         "--ownership-class",
@@ -79,6 +85,16 @@ def safe_optional_label(value: str | None, *, field: str) -> str | None:
     return value
 
 
+def safe_optional_repo_alias(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if SECRETISH_RE.search(value):
+        raise ValueError("repo-alias must not contain secret-shaped material")
+    if not SAFE_REPO_ALIAS_RE.fullmatch(value):
+        raise ValueError("repo-alias must be a public-safe short slug")
+    return value
+
+
 def safe_optional_repo_path(value: str | None) -> str | None:
     if value is None:
         return None
@@ -108,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         policy = load_policy_file(Path(args.policy))
         context = build_context(args)
+        audit_repo_alias = safe_optional_repo_alias(args.repo_alias)
         audit_command = safe_optional_label(args.command, field="command")
         audit_session_id = safe_optional_label(args.session_id, field="session-id")
         audit_path = safe_optional_repo_path(args.path)
@@ -129,11 +146,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.audit_event:
+        audit_repo = audit_repo_alias or args.repo
+        audit_decision = decision
+        if audit_repo_alias is not None:
+            audit_decision = PolicyDecision(
+                mode=decision.mode,
+                reason=decision.reason,
+                matched_repo=audit_repo if decision.matched_repo is not None else None,
+            )
         event = build_audit_event(
-            repo=args.repo,
+            repo=audit_repo,
             capability=capability,
             context=context,
-            decision=decision,
+            decision=audit_decision,
             session_id=audit_session_id,
             command=audit_command,
             path=audit_path,

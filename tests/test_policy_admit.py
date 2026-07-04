@@ -134,6 +134,47 @@ def test_audit_event_is_deterministic_and_wrapper_owned() -> None:
     assert "timestamp" not in payload
 
 
+def test_audit_event_uses_public_repo_alias() -> None:
+    code, payload = run_admit(
+        "--action",
+        "read_docs",
+        "--repo",
+        "yui-stingray/agent-safety-toolkit-example",
+        "--repo-alias",
+        "agent-safety-toolkit-example-public",
+        "--ownership-class",
+        "internal",
+        "--audit-event",
+        "--command",
+        "read_docs",
+        "--path",
+        "README.md",
+    )
+
+    assert code == 0
+    assert payload["repo"] == "agent-safety-toolkit-example-public"
+    assert payload["decision"]["matched_repo"] == "agent-safety-toolkit-example-public"
+    assert payload["decision"]["mode"] == "auto_allow"
+
+
+def test_audit_event_rejects_path_like_repo_alias() -> None:
+    code, payload = run_admit(
+        "--action",
+        "read_docs",
+        "--repo",
+        "yui-stingray/agent-safety-toolkit-example",
+        "--repo-alias",
+        "owner/private-repo",
+        "--ownership-class",
+        "internal",
+        "--audit-event",
+    )
+
+    assert code == 1
+    assert payload["status"] == "error"
+    assert payload["error"] == "repo-alias must be a public-safe short slug"
+
+
 def test_audit_event_rejects_absolute_path() -> None:
     code, payload = run_admit(
         "--action",

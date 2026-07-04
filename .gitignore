@@ -10,6 +10,7 @@ dist/
 !.env.example
 artifacts/private/
 artifacts/local/
+week-logs/
 .agent-guard/evidence/*
 !.agent-guard/evidence/agent-guard-report.json
 !.agent-guard/evidence/agent-surface-inventory.json
