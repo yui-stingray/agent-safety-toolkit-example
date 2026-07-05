@@ -381,6 +381,12 @@ def test_path_guard_ignores_pytest_transient_artifacts(tmp_path: Path) -> None:
     pycache = test_dir / "__pycache__"
     pycache.mkdir()
     (pycache / "test_example.cpython-312-pytest-8.4.2.pyc").write_bytes(b"cache")
+    script_dir = tmp_path / "scripts"
+    script_dir.mkdir()
+    (script_dir / "run_demo.py").write_text("print('demo')\n", encoding="utf-8")
+    script_pycache = script_dir / "__pycache__"
+    script_pycache.mkdir()
+    (script_pycache / "run_demo.cpython-312.pyc").write_bytes(b"cache")
     pytest_cache = tmp_path / ".pytest_cache" / "v" / "cache"
     pytest_cache.mkdir(parents=True)
     (pytest_cache / "nodeids").write_text("tests/test_example.py::test_example\n", encoding="utf-8")
@@ -401,7 +407,41 @@ def test_path_guard_ignores_pytest_transient_artifacts(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
-    assert payload["scanned_paths"] == 2
+    assert payload["scanned_paths"] == 4
+
+
+def test_api_guard_ignores_python_cache_artifacts(tmp_path: Path) -> None:
+    script_dir = tmp_path / "scripts"
+    script_dir.mkdir()
+    (script_dir / "policy_admit.py").write_text("DOCS = 'https://docs.github.com/actions'\n", encoding="utf-8")
+    script_pycache = script_dir / "__pycache__"
+    script_pycache.mkdir()
+    forbidden_url = ("https://api." + "openai.com/v1").encode()
+    (script_pycache / "policy_admit.cpython-312.pyc").write_bytes(forbidden_url)
+
+    test_dir = tmp_path / "tests"
+    test_dir.mkdir()
+    (test_dir / "test_policy_admit.py").write_text("DOCS = 'https://docs.github.com/actions'\n", encoding="utf-8")
+    test_pycache = test_dir / "__pycache__"
+    test_pycache.mkdir()
+    (test_pycache / "test_policy_admit.cpython-312-pytest-8.4.2.pyc").write_bytes(forbidden_url)
+    pytest_cache = tmp_path / ".pytest_cache" / "v" / "cache"
+    pytest_cache.mkdir(parents=True)
+    (pytest_cache / "nodeids").write_text("tests/test_policy_admit.py::test_policy\n", encoding="utf-8")
+
+    result = run_guard(
+        "api",
+        "check",
+        "--root",
+        str(tmp_path),
+        "--policy",
+        str(ROOT / ".agent-guard/api-policy.yaml"),
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["summary"]["scanned_count"] == 2
 
 
 def test_content_guard_rejects_secret_prompt_text(tmp_path: Path) -> None:
