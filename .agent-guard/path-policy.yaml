@@ -3,9 +3,13 @@ scan:
     - "."
   exclude:
     - ".git"
+    - ".agents"
+    - ".codex"
     - ".venv"
     - ".pytest_cache"
     - "__pycache__"
+    - "tests/__pycache__"
+    - "week-logs"
     - "build"
     - "dist"
 policy:

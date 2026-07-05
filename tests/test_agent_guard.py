@@ -370,6 +370,36 @@ def test_path_guard_rejects_private_artifact_paths(tmp_path: Path) -> None:
     assert payload["findings"][0]["rule_id"] == "private_artifact_path"
 
 
+def test_path_guard_ignores_pytest_transient_artifacts(tmp_path: Path) -> None:
+    test_dir = tmp_path / "tests"
+    test_dir.mkdir()
+    (test_dir / "test_example.py").write_text("def test_example():\n    assert True\n", encoding="utf-8")
+    pycache = test_dir / "__pycache__"
+    pycache.mkdir()
+    (pycache / "test_example.cpython-312-pytest-8.4.2.pyc").write_bytes(b"cache")
+    pytest_cache = tmp_path / ".pytest_cache" / "v" / "cache"
+    pytest_cache.mkdir(parents=True)
+    (pytest_cache / "nodeids").write_text("tests/test_example.py::test_example\n", encoding="utf-8")
+    for local_dir in (".agents", ".codex", "week-logs"):
+        artifact_dir = tmp_path / local_dir
+        artifact_dir.mkdir()
+        (artifact_dir / "local.md").write_text("local-only artifact\n", encoding="utf-8")
+
+    result = run_guard(
+        "path",
+        "check",
+        "--root",
+        str(tmp_path),
+        "--policy",
+        str(ROOT / ".agent-guard/path-policy.yaml"),
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["scanned_paths"] == 2
+
+
 def test_content_guard_rejects_secret_prompt_text(tmp_path: Path) -> None:
     bad_file = tmp_path / "note.md"
     bad_file.write_text("Please " + "provide " + "api" + " key here.\n", encoding="utf-8")
