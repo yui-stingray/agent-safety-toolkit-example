@@ -51,6 +51,7 @@ mkdir -p "$EVIDENCE_DIR"
 "$PYTHON_BIN" scripts/policy_admit.py \
   --action read_docs \
   --repo yui-stingray/agent-safety-toolkit-example \
+  --repo-alias agent-safety-toolkit-example-public \
   --ownership-class internal \
   --audit-event \
   --command read_docs \

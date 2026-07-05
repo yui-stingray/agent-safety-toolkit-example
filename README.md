@@ -56,8 +56,13 @@ python3 scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-saf
 Emit the deterministic audit event shape used by wrappers and CI:
 
 ```bash
-python3 scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-safety-toolkit-example --audit-event --command read_docs --path README.md
+python3 scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-safety-toolkit-example --repo-alias agent-safety-toolkit-example-public --audit-event --command read_docs --path README.md
 ```
+
+`--repo` is the identifier evaluated against `.agent-policy/policy.toml`.
+Audit events are public evidence, so use `--repo-alias` when the raw repository
+name should not appear in the published event. Without an alias, the raw
+`repo` value and matching decision repo are emitted into the audit-event JSON.
 
 ## Local Verification
 
@@ -122,6 +127,11 @@ It writes generated evidence files under `.agent-guard/evidence/`:
 - `evidence-pack-manifest.json`: compact artifact index for reviewer handoff,
   including the report and `agent-policy` audit-event artifact references.
 
+The current pinned `agent-guard` release records standalone
+`agent-surface-inventory.json` manifest entries with the generic `report` role.
+Treat the file path and the embedded `surface_inventory` section as the surface
+inventory contract until a pinned release exposes distinct artifact roles.
+
 ## Updating Digests
 
 The digest policy pins files that define the public demo contract:
@@ -144,6 +154,12 @@ agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --
 
 ## Public Safety Scope
 
-The repository intentionally avoids private corpora, local automation state, credentials, and private repository examples. Negative guard fixtures are generated inside tests at runtime rather than stored as committed payload files.
+The repository intentionally avoids private corpora, local automation state,
+credentials, and private repository examples. Guard-regression payloads that
+need executable checks are generated inside tests at runtime rather than stored
+as committed payload files.
+The small committed `fixtures/adversarial/` corpus is inert, dummy-valued, and
+fenced for documentation and review only; production scripts and the demo runner
+do not import or execute it.
 
 The policy choices here are examples, not a universal safety model. Real maintainers should adapt capability names, review thresholds, and static guard patterns to their own repositories.

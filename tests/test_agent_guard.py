@@ -14,6 +14,8 @@ PUBLISHING_CHECKLIST = ROOT / "docs" / "publishing-checklist.md"
 PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 EVIDENCE_CONSUMER = ROOT / "examples" / "evidence_consumer.py"
+RUN_DEMO = ROOT / "scripts" / "run_demo.sh"
+ADVERSARIAL_FIXTURES = ROOT / "fixtures" / "adversarial"
 
 
 def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
@@ -173,13 +175,23 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json" in readme
     assert "--mcp-policy .agent-guard/mcp-policy.yaml" in readme
     assert "--agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json" in readme
+    assert "--repo-alias agent-safety-toolkit-example-public" in readme
+    assert "Without an alias" in readme
+    assert "matching decision repo are emitted" in readme
+    assert "standalone" in readme
+    assert "`agent-surface-inventory.json` manifest entries" in readme
+    assert "generic `report` role" in readme
+    assert "fixtures/adversarial/" in readme
     assert "raw scanner" in readme
     assert "JSON from a private repository" in readme
     assert "validate live OAuth flows" in readme
     assert "MCP tool-poisoning behavior" in readme
     assert "agent-policy` audit-event artifact reference" in recipe
     assert "Do not copy or publish" in recipe
+    assert "public audit-event aliases passed as `--repo-alias`" in recipe
     assert "raw per-scanner JSON from a private repository" in recipe
+    assert "without a public-safe `--repo-alias`" in recipe
+    assert "listed as a generic `report`" in recipe
     assert "live OAuth validator" in recipe
     assert "generated evidence from a private repository" in recipe
     assert "LLM reviewer" in recipe
@@ -192,8 +204,35 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6" not in ci_workflow
     assert 'python-version: "3.12"' in ci_workflow
     assert "actions/setup-python exposes the selected 3.12 runtime as `python`" in ci_workflow
+    assert "python -m venv /tmp/agent-safety-download-check" in ci_workflow
+    assert "pip download --index-url https://pypi.org/simple --no-deps --require-hashes" in ci_workflow
     assert "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt" in ci_workflow
     assert "python -m agent_guard.cli surface inventory" in ci_workflow
+    assert "git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json" in ci_workflow
+
+
+def test_committed_adversarial_fixtures_are_inert_and_isolated() -> None:
+    readme = (ADVERSARIAL_FIXTURES / "README.md").read_text(encoding="utf-8")
+    fixture_rows = [
+        json.loads(line)
+        for line in (ADVERSARIAL_FIXTURES / "static_cases.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    families = {row["family"] for row in fixture_rows}
+
+    assert "INERT FIXTURE - DO NOT EXECUTE" in readme
+    assert families == {"approval-bypass", "indirect-injection", "mcp-metadata-poisoning"}
+    assert len(fixture_rows) == 6
+    assert all(row["fixture"].startswith("INERT FIXTURE - DO NOT EXECUTE:") for row in fixture_rows)
+    assert all(row["expected_use"] == "static review corpus only" for row in fixture_rows)
+
+    production_text = "\n".join(
+        [
+            RUN_DEMO.read_text(encoding="utf-8"),
+            (ROOT / "scripts" / "policy_admit.py").read_text(encoding="utf-8"),
+            EVIDENCE_CONSUMER.read_text(encoding="utf-8"),
+        ]
+    )
+    assert "fixtures/adversarial" not in production_text
 
 
 def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
@@ -329,6 +368,36 @@ def test_path_guard_rejects_private_artifact_paths(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["status"] == "violation"
     assert payload["findings"][0]["rule_id"] == "private_artifact_path"
+
+
+def test_path_guard_ignores_pytest_transient_artifacts(tmp_path: Path) -> None:
+    test_dir = tmp_path / "tests"
+    test_dir.mkdir()
+    (test_dir / "test_example.py").write_text("def test_example():\n    assert True\n", encoding="utf-8")
+    pycache = test_dir / "__pycache__"
+    pycache.mkdir()
+    (pycache / "test_example.cpython-312-pytest-8.4.2.pyc").write_bytes(b"cache")
+    pytest_cache = tmp_path / ".pytest_cache" / "v" / "cache"
+    pytest_cache.mkdir(parents=True)
+    (pytest_cache / "nodeids").write_text("tests/test_example.py::test_example\n", encoding="utf-8")
+    for local_dir in (".agents", ".codex", "week-logs"):
+        artifact_dir = tmp_path / local_dir
+        artifact_dir.mkdir()
+        (artifact_dir / "local.md").write_text("local-only artifact\n", encoding="utf-8")
+
+    result = run_guard(
+        "path",
+        "check",
+        "--root",
+        str(tmp_path),
+        "--policy",
+        str(ROOT / ".agent-guard/path-policy.yaml"),
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["scanned_paths"] == 2
 
 
 def test_content_guard_rejects_secret_prompt_text(tmp_path: Path) -> None:

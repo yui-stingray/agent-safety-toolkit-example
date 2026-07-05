@@ -10,6 +10,11 @@ dist/
 !.env.example
 artifacts/private/
 artifacts/local/
+week-logs/
+# Local agent tooling dirs: excluded from guard scans, so keep them out of the
+# tree entirely to avoid a scan blind spot (allowlist semantic escape).
+.agents/
+.codex/
 .agent-guard/evidence/*
 !.agent-guard/evidence/agent-guard-report.json
 !.agent-guard/evidence/agent-surface-inventory.json

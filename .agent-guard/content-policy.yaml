@@ -8,10 +8,13 @@ file_globs:
   - "**/*.txt"
 exclude_globs:
   - ".agent-guard/**"
+  - ".agents/**"
+  - ".codex/**"
   - ".git/**"
   - ".venv/**"
   - ".pytest_cache/**"
   - "__pycache__/**"
+  - "week-logs/**"
   - "build/**"
   - "dist/**"
 forbidden_patterns:
