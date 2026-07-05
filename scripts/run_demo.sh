@@ -57,6 +57,7 @@ mkdir -p "$EVIDENCE_DIR"
   --command read_docs \
   --path README.md \
   > "$EVIDENCE_DIR/policy-admission-event.json"
+"$PYTHON_BIN" scripts/validate_policy_event.py "$EVIDENCE_DIR/policy-admission-event.json"
 
 expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --action edit_docs \

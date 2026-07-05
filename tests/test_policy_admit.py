@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "policy_admit.py"
+VALIDATOR = ROOT / "scripts" / "validate_policy_event.py"
 POLICY = ROOT / ".agent-policy" / "policy.toml"
 
 
@@ -20,6 +21,21 @@ def run_admit(*extra: str) -> tuple[int, dict[str, object]]:
     )
     assert result.stdout, result.stderr
     return result.returncode, json.loads(result.stdout)
+
+
+def run_validator(path: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(VALIDATOR), str(path)],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def write_json(path: Path, payload: dict[str, object]) -> Path:
+    path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    return path
 
 
 def test_read_docs_is_auto_allowed() -> None:
@@ -270,3 +286,81 @@ def test_audit_event_rejects_command_text() -> None:
     assert code == 1
     assert payload["status"] == "error"
     assert payload["error"] == "command must be a short non-secret label"
+
+
+def test_public_audit_event_validator_accepts_alias_event(tmp_path: Path) -> None:
+    code, payload = run_admit(
+        "--action",
+        "read_docs",
+        "--repo",
+        "yui-stingray/agent-safety-toolkit-example",
+        "--repo-alias",
+        "agent-safety-toolkit-example-public",
+        "--ownership-class",
+        "internal",
+        "--audit-event",
+        "--command",
+        "read_docs",
+        "--path",
+        "README.md",
+    )
+
+    assert code == 0
+    result = run_validator(write_json(tmp_path / "policy-admission-event.json", payload))
+    assert result.returncode == 0, result.stderr
+    validator_payload = json.loads(result.stdout)
+    assert validator_payload == {"schema_version": "agent-policy.audit-event.public.v1", "status": "ok"}
+
+
+def test_public_audit_event_validator_rejects_raw_repo_identifier(tmp_path: Path) -> None:
+    code, payload = run_admit(
+        "--action",
+        "read_docs",
+        "--repo",
+        "yui-stingray/agent-safety-toolkit-example",
+        "--ownership-class",
+        "internal",
+        "--audit-event",
+        "--command",
+        "read_docs",
+        "--path",
+        "README.md",
+    )
+
+    assert code == 0
+    result = run_validator(write_json(tmp_path / "policy-admission-event.json", payload))
+    assert result.returncode == 1
+    combined = result.stdout + result.stderr
+    assert "repo must be a public-safe repository alias" in combined
+    assert "yui-stingray/agent-safety-toolkit-example" not in combined
+
+
+def test_public_audit_event_validator_rejects_unsupported_shape(tmp_path: Path) -> None:
+    payload = {
+        "capability": "read",
+        "context": {"ownership_class": "internal"},
+        "decision": {"matched_repo": "agent-safety-toolkit-example-public", "mode": "auto_allow", "reason": "repo_policy"},
+        "extra": "not-public-contract",
+        "repo": "agent-safety-toolkit-example-public",
+    }
+
+    result = run_validator(write_json(tmp_path / "policy-admission-event.json", payload))
+    assert result.returncode == 1
+    assert "audit event contains unsupported fields" in result.stderr
+
+
+def test_public_audit_event_validator_rejects_secret_without_leaking_value(tmp_path: Path) -> None:
+    secret_value = "github_pat_" + ("0" * 20)
+    payload = {
+        "capability": "read",
+        "context": {"ownership_class": "internal"},
+        "decision": {"matched_repo": "agent-safety-toolkit-example-public", "mode": "auto_allow", "reason": "repo_policy"},
+        "repo": "agent-safety-toolkit-example-public",
+        "session_id": secret_value,
+    }
+
+    result = run_validator(write_json(tmp_path / "policy-admission-event.json", payload))
+    assert result.returncode == 1
+    combined = result.stdout + result.stderr
+    assert "secret-shaped material" in combined
+    assert secret_value not in combined

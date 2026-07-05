@@ -18,6 +18,7 @@ Start with these files:
 - `.agent-guard/workflow-policy.yaml`
 - `examples/evidence_consumer.py`
 - `scripts/policy_admit.py`
+- `scripts/validate_policy_event.py`
 - `scripts/run_demo.sh`
 - `scripts/update_digests.py`
 - `requirements/agent-safety-tools.txt`
@@ -60,6 +61,7 @@ python3 -m venv .venv
 python3 -m pip install --require-hashes -r requirements/agent-safety-tools.txt
 python3 -m pytest -q
 bash scripts/run_demo.sh
+python3 scripts/validate_policy_event.py .agent-guard/evidence/policy-admission-event.json
 python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json
 ```
 
@@ -90,6 +92,7 @@ For each pull request that changes agent instructions, policy files, wrapper
 logic, or CI guard commands, review:
 
 - the `agent-policy` runtime admission decision or audit event;
+- the public audit-event schema validation result;
 - the `agent-guard` context inventory and context lock coverage;
 - the `agent-guard` surface inventory v2 and evidence-pack manifest, including
   a sanitized `agent-policy` audit-event artifact reference;

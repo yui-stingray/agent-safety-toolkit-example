@@ -63,6 +63,9 @@ python3 scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-saf
 Audit events are public evidence, so use `--repo-alias` when the raw repository
 name should not appear in the published event. Without an alias, the raw
 `repo` value and matching decision repo are emitted into the audit-event JSON.
+`scripts/validate_policy_event.py` validates the committed public audit-event
+artifact and rejects raw repository identifiers, local paths, unsupported
+fields, and secret-shaped values before `agent-guard` references it.
 
 ## Local Verification
 
@@ -79,6 +82,7 @@ bash scripts/run_demo.sh
 The end-to-end script runs:
 
 - expected pass and fail runtime admission checks
+- public-safe audit-event schema validation
 - path guard
 - context guard
 - redacted context inventory
@@ -139,6 +143,7 @@ The digest policy pins files that define the public demo contract:
 - `AGENTS.md`
 - `README.md`
 - `scripts/policy_admit.py`
+- `scripts/validate_policy_event.py`
 - `.agent-policy/policy.toml`
 - `.agent-guard/mcp-policy.yaml`
 - `.agent-guard/workflow-policy.yaml`

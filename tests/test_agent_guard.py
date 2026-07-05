@@ -167,8 +167,10 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert ".agent-guard/workflow-policy.yaml" in recipe
     assert "examples/evidence_consumer.py" in recipe
     assert "scripts/policy_admit.py" in recipe
+    assert "scripts/validate_policy_event.py" in recipe
     assert "python3 scripts/update_digests.py" in recipe
     assert "python3 -m venv .venv" in recipe
+    assert "python3 scripts/validate_policy_event.py .agent-guard/evidence/policy-admission-event.json" in recipe
     assert "python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
     assert "recommended-profile conformance" in readme
     assert "--evidence-preset recommended" in readme
@@ -178,6 +180,8 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "--repo-alias agent-safety-toolkit-example-public" in readme
     assert "Without an alias" in readme
     assert "matching decision repo are emitted" in readme
+    assert "rejects raw repository identifiers" in readme
+    assert "public-safe audit-event schema validation" in readme
     assert "standalone" in readme
     assert "`agent-surface-inventory.json` manifest entries" in readme
     assert "generic `report` role" in readme

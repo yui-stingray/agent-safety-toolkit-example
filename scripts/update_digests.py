@@ -12,6 +12,7 @@ PINNED_FILES = [
     ("agent_context", "AGENTS.md"),
     ("readme", "README.md"),
     ("policy_wrapper", "scripts/policy_admit.py"),
+    ("policy_event_validator", "scripts/validate_policy_event.py"),
     ("policy_matrix", ".agent-policy/policy.toml"),
     ("mcp_policy", ".agent-guard/mcp-policy.yaml"),
     ("workflow_policy", ".agent-guard/workflow-policy.yaml"),
