@@ -17,7 +17,7 @@ checks:
     sha256: e42f02913dfa5cf2c97c4c744607fd1af7ba92797ca20aa76acc8a4edfd6faa5
   - id: mcp_policy
     path: .agent-guard/mcp-policy.yaml
-    sha256: 554100e32f43f9f35ba18713899f24693737f086755eb5b2fb059ed45f67770b
+    sha256: 41c974ecafe4f2c0dfe9f5b010047dbeba51c503875ac5f2ec0b1e3c156952d7
   - id: workflow_policy
     path: .agent-guard/workflow-policy.yaml
     sha256: 336c86e01abc9b204c84866b0a61c032abe44a9bc2b431b9649227f836c8c44c
