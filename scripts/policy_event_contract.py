@@ -34,9 +34,11 @@ SECRETISH_RE: Final = re.compile(
 )
 
 
-def validate_public_audit_event(payload: dict[str, Any]) -> None:
+def validate_public_audit_event(payload: Any) -> None:
     """Validate the demo's public-safe audit-event profile."""
 
+    if not isinstance(payload, dict):
+        raise ValueError("audit event must be a JSON object")
     _validate_keys(payload, allowed=TOP_LEVEL_KEYS, required=REQUIRED_TOP_LEVEL_KEYS, field="audit event")
     validate_public_repo_alias(payload["repo"], field="repo")
     _validate_enum(payload["capability"], allowed=PUBLIC_AUDIT_CAPABILITIES, field="capability")
@@ -130,9 +132,7 @@ def _validate_enum(value: Any, *, allowed: set[str] | frozenset[str], field: str
 def _looks_like_local_path(value: str) -> bool:
     windows_path = PureWindowsPath(value)
     return (
-        value.startswith("~")
-        or value.startswith("$")
-        or value.lower().startswith("file:")
+        value.lower().startswith(("~", "$", "file:"))
         or "\\" in value
         or WINDOWS_DRIVE_RE.match(value) is not None
         or bool(windows_path.drive or windows_path.root)

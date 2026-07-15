@@ -6,6 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from scripts.policy_event_contract import validate_public_audit_event
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "policy_admit.py"
 VALIDATOR = ROOT / "scripts" / "validate_policy_event.py"
@@ -404,6 +408,11 @@ def test_public_audit_event_validator_rejects_unsupported_shape(tmp_path: Path) 
     result = run_validator(write_json(tmp_path / "policy-admission-event.json", payload))
     assert result.returncode == 1
     assert "audit event contains unsupported fields" in result.stderr
+
+
+def test_shared_public_audit_contract_rejects_non_object() -> None:
+    with pytest.raises(ValueError, match="audit event must be a JSON object"):
+        validate_public_audit_event([])
 
 
 def test_public_audit_event_validator_rejects_secret_without_leaking_value(tmp_path: Path) -> None:
