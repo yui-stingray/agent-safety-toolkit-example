@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -310,6 +311,62 @@ def test_public_audit_event_validator_accepts_alias_event(tmp_path: Path) -> Non
     assert result.returncode == 0, result.stderr
     validator_payload = json.loads(result.stdout)
     assert validator_payload == {"schema_version": "agent-policy.audit-event.public.v1", "status": "ok"}
+
+
+def test_module_execution_uses_repo_contract_instead_of_cwd_shadow(tmp_path: Path) -> None:
+    (tmp_path / "policy_event_contract.py").write_text(
+        "ACTION_CAPABILITIES = {'read_docs': 'push.force'}\n"
+        "PUBLIC_AUDIT_CAPABILITIES = frozenset({'fake.capability'})\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.policy_admit",
+            "--policy",
+            str(POLICY),
+            "--action",
+            "read_docs",
+            "--repo",
+            "yui-stingray/agent-safety-toolkit-example",
+            "--repo-alias",
+            "agent-safety-toolkit-example-public",
+            "--ownership-class",
+            "internal",
+            "--audit-event",
+            "--command",
+            "read_docs",
+            "--path",
+            "README.md",
+        ],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["capability"] == "read"
+    event_path = write_json(tmp_path / "policy-admission-event.json", payload)
+    validation = subprocess.run(
+        [sys.executable, "-m", "scripts.validate_policy_event", str(event_path)],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert validation.returncode == 0, validation.stderr
+    assert json.loads(validation.stdout) == {
+        "schema_version": "agent-policy.audit-event.public.v1",
+        "status": "ok",
+    }
 
 
 def test_public_audit_event_validator_rejects_raw_repo_identifier(tmp_path: Path) -> None:

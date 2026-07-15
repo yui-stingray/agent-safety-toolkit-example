@@ -12,15 +12,14 @@ from typing import Final
 
 from agent_policy import PolicyDecision, audit_event_to_json, build_audit_event, evaluate, load_policy_file
 
+if __package__:
+    from .policy_event_contract import ACTION_CAPABILITIES
+else:
+    from policy_event_contract import ACTION_CAPABILITIES
+
 DEFAULT_REPO: Final = "yui-stingray/agent-safety-toolkit-example"
 DEFAULT_POLICY: Final = ".agent-policy/policy.toml"
 
-ACTION_CAPABILITIES: Final[dict[str, str]] = {
-    "read_docs": "read",
-    "edit_docs": "write",
-    "publish_release": "artifact.publish",
-    "force_push": "push.force",
-}
 SAFE_LABEL_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$")
 SAFE_REPO_ALIAS_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 SAFE_REPO_PATH_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")

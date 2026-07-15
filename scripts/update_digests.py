@@ -11,6 +11,7 @@ POLICY_PATH = ROOT / ".agent-guard" / "context-digest-policy.yaml"
 PINNED_FILES = [
     ("agent_context", "AGENTS.md"),
     ("readme", "README.md"),
+    ("policy_event_contract", "scripts/policy_event_contract.py"),
     ("policy_wrapper", "scripts/policy_admit.py"),
     ("policy_event_validator", "scripts/validate_policy_event.py"),
     ("policy_matrix", ".agent-policy/policy.toml"),

@@ -10,6 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 ADOPTION_RECIPE = ROOT / "docs" / "adoption-recipe.md"
+CONTEXT_DIGEST_POLICY = ROOT / ".agent-guard" / "context-digest-policy.yaml"
 PUBLISHING_CHECKLIST = ROOT / "docs" / "publishing-checklist.md"
 PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
@@ -166,6 +167,7 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert ".agent-guard/mcp-policy.yaml" in recipe
     assert ".agent-guard/workflow-policy.yaml" in recipe
     assert "examples/evidence_consumer.py" in recipe
+    assert "scripts/policy_event_contract.py" in recipe
     assert "scripts/policy_admit.py" in recipe
     assert "scripts/validate_policy_event.py" in recipe
     assert "python3 scripts/update_digests.py" in recipe
@@ -190,9 +192,12 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "JSON from a private repository" in readme
     assert "validate live OAuth flows" in readme
     assert "MCP tool-poisoning behavior" in readme
+    assert "scripts/policy_event_contract.py" in readme
     assert "agent-policy` audit-event artifact reference" in recipe
     assert "Do not copy or publish" in recipe
     assert "public audit-event aliases passed as `--repo-alias`" in recipe
+    assert "shared action-to-capability contract" in recipe
+    assert "action-to-capability map in `scripts/policy_admit.py`" not in recipe
     assert "raw per-scanner JSON from a private repository" in recipe
     assert "without a public-safe `--repo-alias`" in recipe
     assert "listed as a generic `report`" in recipe
@@ -213,6 +218,20 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt" in ci_workflow
     assert "python -m agent_guard.cli surface inventory" in ci_workflow
     assert "git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json" in ci_workflow
+
+
+def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    recipe = ADOPTION_RECIPE.read_text(encoding="utf-8")
+    digest_policy = CONTEXT_DIGEST_POLICY.read_text(encoding="utf-8")
+    update_script = (ROOT / "scripts" / "update_digests.py").read_text(encoding="utf-8")
+
+    assert '("policy_event_contract", "scripts/policy_event_contract.py")' in update_script
+    assert "id: policy_event_contract" in digest_policy
+    assert "path: scripts/policy_event_contract.py" in digest_policy
+    assert "- `scripts/policy_event_contract.py`" in readme
+    assert "- `scripts/policy_event_contract.py`" in recipe
+    assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
 
 
 def test_committed_adversarial_fixtures_are_inert_and_isolated() -> None:

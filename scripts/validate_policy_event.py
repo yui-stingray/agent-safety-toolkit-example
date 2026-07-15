@@ -9,13 +9,17 @@ import sys
 from pathlib import Path, PureWindowsPath
 from typing import Any, Final
 
+if __package__:
+    from .policy_event_contract import PUBLIC_AUDIT_CAPABILITIES
+else:
+    from policy_event_contract import PUBLIC_AUDIT_CAPABILITIES
+
 SCHEMA_VERSION: Final = "agent-policy.audit-event.public.v1"
 
 TOP_LEVEL_KEYS: Final = {"repo", "capability", "context", "decision", "command", "path", "session_id"}
 REQUIRED_TOP_LEVEL_KEYS: Final = {"repo", "capability", "context", "decision"}
 CONTEXT_KEYS: Final = {"ownership_class", "first_write_to_repo"}
 DECISION_KEYS: Final = {"mode", "reason", "matched_repo"}
-CAPABILITIES: Final = {"read", "write", "artifact.publish", "push.force"}
 DECISION_MODES: Final = {"auto_allow", "require_approval", "deny"}
 OWNERSHIP_CLASSES: Final = {"internal", "external"}
 
@@ -41,7 +45,7 @@ def load_event(path: Path) -> dict[str, Any]:
 def validate_event(payload: dict[str, Any]) -> None:
     _validate_keys(payload, allowed=TOP_LEVEL_KEYS, required=REQUIRED_TOP_LEVEL_KEYS, field="audit event")
     _validate_repo_alias(payload["repo"], field="repo")
-    _validate_enum(payload["capability"], allowed=CAPABILITIES, field="capability")
+    _validate_enum(payload["capability"], allowed=PUBLIC_AUDIT_CAPABILITIES, field="capability")
     _validate_context(payload["context"])
     _validate_decision(payload["decision"])
     if "command" in payload:
