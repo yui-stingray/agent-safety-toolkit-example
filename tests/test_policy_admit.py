@@ -189,7 +189,7 @@ def test_audit_event_rejects_path_like_repo_alias() -> None:
 
     assert code == 1
     assert payload["status"] == "error"
-    assert payload["error"] == "repo-alias must be a public-safe short slug"
+    assert payload["error"] == "repo-alias must be a public-safe repository alias"
 
 
 def test_audit_event_rejects_absolute_path() -> None:
@@ -207,7 +207,7 @@ def test_audit_event_rejects_absolute_path() -> None:
 
     assert code == 1
     assert payload["status"] == "error"
-    assert payload["error"] == "path must be repository-relative and must not contain parent traversal"
+    assert payload["error"] == "path must not contain local path syntax"
 
 
 def test_audit_event_rejects_windows_local_path() -> None:
@@ -228,7 +228,7 @@ def test_audit_event_rejects_windows_local_path() -> None:
 
         assert code == 1
         assert payload["status"] == "error"
-        assert payload["error"] == "path must be repository-relative and must not contain local path syntax"
+        assert payload["error"] == "path must not contain local path syntax"
 
 
 def test_audit_event_rejects_local_path_shorthand_and_uri() -> None:
@@ -250,7 +250,7 @@ def test_audit_event_rejects_local_path_shorthand_and_uri() -> None:
 
         assert code == 1
         assert payload["status"] == "error"
-        assert payload["error"] == "path must be a short repository-relative public path"
+        assert payload["error"] == "path must not contain local path syntax"
 
 
 def test_audit_event_rejects_secret_shaped_session_id() -> None:
@@ -286,7 +286,7 @@ def test_audit_event_rejects_command_text() -> None:
 
     assert code == 1
     assert payload["status"] == "error"
-    assert payload["error"] == "command must be a short non-secret label"
+    assert payload["error"] == "command must be a public-safe short label"
 
 
 def test_public_audit_event_validator_accepts_alias_event(tmp_path: Path) -> None:

@@ -193,6 +193,7 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "validate live OAuth flows" in readme
     assert "MCP tool-poisoning behavior" in readme
     assert "scripts/policy_event_contract.py" in readme
+    assert "one public-safe field grammar" in readme
     assert "agent-policy` audit-event artifact reference" in recipe
     assert "Do not copy or publish" in recipe
     assert "public audit-event aliases passed as `--repo-alias`" in recipe
