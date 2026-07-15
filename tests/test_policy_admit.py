@@ -6,6 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from scripts.policy_event_contract import validate_public_audit_event
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "policy_admit.py"
 VALIDATOR = ROOT / "scripts" / "validate_policy_event.py"
@@ -189,7 +193,7 @@ def test_audit_event_rejects_path_like_repo_alias() -> None:
 
     assert code == 1
     assert payload["status"] == "error"
-    assert payload["error"] == "repo-alias must be a public-safe short slug"
+    assert payload["error"] == "repo-alias must be a public-safe repository alias"
 
 
 def test_audit_event_rejects_absolute_path() -> None:
@@ -207,7 +211,7 @@ def test_audit_event_rejects_absolute_path() -> None:
 
     assert code == 1
     assert payload["status"] == "error"
-    assert payload["error"] == "path must be repository-relative and must not contain parent traversal"
+    assert payload["error"] == "path must not contain local path syntax"
 
 
 def test_audit_event_rejects_windows_local_path() -> None:
@@ -228,7 +232,7 @@ def test_audit_event_rejects_windows_local_path() -> None:
 
         assert code == 1
         assert payload["status"] == "error"
-        assert payload["error"] == "path must be repository-relative and must not contain local path syntax"
+        assert payload["error"] == "path must not contain local path syntax"
 
 
 def test_audit_event_rejects_local_path_shorthand_and_uri() -> None:
@@ -250,7 +254,7 @@ def test_audit_event_rejects_local_path_shorthand_and_uri() -> None:
 
         assert code == 1
         assert payload["status"] == "error"
-        assert payload["error"] == "path must be a short repository-relative public path"
+        assert payload["error"] == "path must not contain local path syntax"
 
 
 def test_audit_event_rejects_secret_shaped_session_id() -> None:
@@ -286,7 +290,7 @@ def test_audit_event_rejects_command_text() -> None:
 
     assert code == 1
     assert payload["status"] == "error"
-    assert payload["error"] == "command must be a short non-secret label"
+    assert payload["error"] == "command must be a public-safe short label"
 
 
 def test_public_audit_event_validator_accepts_alias_event(tmp_path: Path) -> None:
@@ -404,6 +408,11 @@ def test_public_audit_event_validator_rejects_unsupported_shape(tmp_path: Path) 
     result = run_validator(write_json(tmp_path / "policy-admission-event.json", payload))
     assert result.returncode == 1
     assert "audit event contains unsupported fields" in result.stderr
+
+
+def test_shared_public_audit_contract_rejects_non_object() -> None:
+    with pytest.raises(ValueError, match="audit event must be a JSON object"):
+        validate_public_audit_event([])
 
 
 def test_public_audit_event_validator_rejects_secret_without_leaking_value(tmp_path: Path) -> None:

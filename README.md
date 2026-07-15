@@ -39,7 +39,8 @@ repository contents, hashes, tokens, or local paths.
 ## Runtime Admission Demo
 
 The shared contract in `scripts/policy_event_contract.py` keeps the demo
-action-to-capability vocabulary small and explicit. The wrapper in
+action-to-capability vocabulary small and explicit, and gives the producer and
+validator one public-safe field grammar. The wrapper in
 `scripts/policy_admit.py` uses that contract for runtime decisions, and
 `scripts/validate_policy_event.py` uses it to validate public audit events:
 

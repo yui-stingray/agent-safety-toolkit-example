@@ -5,28 +5,29 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Final
 
 from agent_policy import PolicyDecision, audit_event_to_json, build_audit_event, evaluate, load_policy_file
 
 if __package__:
-    from .policy_event_contract import ACTION_CAPABILITIES
+    from .policy_event_contract import (
+        ACTION_CAPABILITIES,
+        normalize_public_repo_path,
+        validate_public_label,
+        validate_public_repo_alias,
+    )
 else:
-    from policy_event_contract import ACTION_CAPABILITIES
+    from policy_event_contract import (
+        ACTION_CAPABILITIES,
+        normalize_public_repo_path,
+        validate_public_label,
+        validate_public_repo_alias,
+    )
 
 DEFAULT_REPO: Final = "yui-stingray/agent-safety-toolkit-example"
 DEFAULT_POLICY: Final = ".agent-policy/policy.toml"
-
-SAFE_LABEL_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$")
-SAFE_REPO_ALIAS_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
-SAFE_REPO_PATH_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
-WINDOWS_DRIVE_RE: Final = re.compile(r"^[A-Za-z]:[\\/]")
-SECRETISH_RE: Final = re.compile(
-    r"(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16})"
-)
 
 EXIT_BY_MODE: Final[dict[str, int]] = {
     "auto_allow": 0,
@@ -77,39 +78,19 @@ def build_context(args: argparse.Namespace) -> dict[str, object]:
 def safe_optional_label(value: str | None, *, field: str) -> str | None:
     if value is None:
         return None
-    if SECRETISH_RE.search(value):
-        raise ValueError(f"{field} must not contain secret-shaped material")
-    if not SAFE_LABEL_RE.fullmatch(value):
-        raise ValueError(f"{field} must be a short non-secret label")
-    return value
+    return validate_public_label(value, field=field)
 
 
 def safe_optional_repo_alias(value: str | None) -> str | None:
     if value is None:
         return None
-    if SECRETISH_RE.search(value):
-        raise ValueError("repo-alias must not contain secret-shaped material")
-    if not SAFE_REPO_ALIAS_RE.fullmatch(value):
-        raise ValueError("repo-alias must be a public-safe short slug")
-    return value
+    return validate_public_repo_alias(value, field="repo-alias")
 
 
 def safe_optional_repo_path(value: str | None) -> str | None:
     if value is None:
         return None
-    path = Path(value)
-    if path.is_absolute() or any(part == ".." for part in path.parts):
-        raise ValueError("path must be repository-relative and must not contain parent traversal")
-    windows_path = PureWindowsPath(value)
-    if "\\" in value or WINDOWS_DRIVE_RE.match(value) or windows_path.drive or windows_path.root:
-        raise ValueError("path must be repository-relative and must not contain local path syntax")
-    if not SAFE_REPO_PATH_RE.fullmatch(value):
-        raise ValueError("path must be a short repository-relative public path")
-    if any(part in ("", ".") for part in path.parts):
-        raise ValueError("path must be a normalized repository-relative public path")
-    if SECRETISH_RE.search(value):
-        raise ValueError("path must not contain secret-shaped material")
-    return path.as_posix()
+    return normalize_public_repo_path(value)
 
 
 def emit(payload: dict[str, object]) -> None:
