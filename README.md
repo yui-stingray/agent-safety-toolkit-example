@@ -38,7 +38,10 @@ repository contents, hashes, tokens, or local paths.
 
 ## Runtime Admission Demo
 
-The wrapper in `scripts/policy_admit.py` deliberately keeps action parsing small and explicit:
+The shared contract in `scripts/policy_event_contract.py` keeps the demo
+action-to-capability vocabulary small and explicit. The wrapper in
+`scripts/policy_admit.py` uses that contract for runtime decisions, and
+`scripts/validate_policy_event.py` uses it to validate public audit events:
 
 | Demo action | Capability | Expected mode | Exit |
 | --- | --- | --- | --- |
@@ -142,6 +145,7 @@ The digest policy pins files that define the public demo contract:
 
 - `AGENTS.md`
 - `README.md`
+- `scripts/policy_event_contract.py`
 - `scripts/policy_admit.py`
 - `scripts/validate_policy_event.py`
 - `.agent-policy/policy.toml`

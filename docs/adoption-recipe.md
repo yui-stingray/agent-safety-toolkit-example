@@ -17,6 +17,7 @@ Start with these files:
 - `.agent-guard/path-policy.yaml`
 - `.agent-guard/workflow-policy.yaml`
 - `examples/evidence_consumer.py`
+- `scripts/policy_event_contract.py`
 - `scripts/policy_admit.py`
 - `scripts/validate_policy_event.py`
 - `scripts/run_demo.sh`
@@ -34,7 +35,10 @@ Replace the demo-specific values before linking the repository publicly:
 - repository identifiers such as `yui-stingray/agent-safety-toolkit-example`;
 - public audit-event aliases passed as `--repo-alias` when raw repository names
   should not appear in evidence;
-- the action-to-capability map in `scripts/policy_admit.py`;
+- the shared action-to-capability contract in
+  `scripts/policy_event_contract.py`;
+- wrapper argument handling and public-safe field normalization in
+  `scripts/policy_admit.py`;
 - the capability matrix in `.agent-policy/policy.toml`;
 - content scan targets in `.agent-guard/content-policy.yaml`;
 - static MCP config risk labels in `.agent-guard/mcp-policy.yaml`;

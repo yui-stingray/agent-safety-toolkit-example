@@ -12,9 +12,10 @@ python -m pytest -q
 bash scripts/run_demo.sh
 ```
 
-If you intentionally change `AGENTS.md`, `README.md`, `scripts/policy_admit.py`,
-or `.agent-policy/policy.toml`, refresh the digest policy and verify context
-lock coverage:
+If you intentionally change `AGENTS.md`, `README.md`,
+`scripts/policy_event_contract.py`, `scripts/policy_admit.py`,
+`scripts/validate_policy_event.py`, or `.agent-policy/policy.toml`, refresh the
+digest policy and verify context lock coverage:
 
 ```bash
 python scripts/update_digests.py
