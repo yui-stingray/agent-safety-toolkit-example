@@ -259,6 +259,18 @@ def test_committed_adversarial_fixtures_are_inert_and_isolated() -> None:
     assert "fixtures/adversarial" not in production_text
 
 
+def test_committed_surface_inventory_reports_its_final_size() -> None:
+    inventory_path = ROOT / ".agent-guard" / "evidence" / "agent-surface-inventory.json"
+    payload = json.loads(inventory_path.read_text(encoding="utf-8"))
+    self_entry = next(
+        item
+        for item in payload["surface_inventory"]["surfaces"]
+        if item.get("path") == ".agent-guard/evidence/agent-surface-inventory.json"
+    )
+
+    assert self_entry["size_bytes"] == inventory_path.stat().st_size
+
+
 def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
     result = run_guard(*full_report_args())
 

@@ -28,6 +28,8 @@ CONTENT_TARGETS=(
   pyproject.toml
 )
 EVIDENCE_DIR=".agent-guard/evidence"
+SURFACE_INVENTORY_TMP="$(mktemp "${TMPDIR:-/tmp}/agent-surface-inventory.XXXXXX.json")"
+trap 'rm -f "$SURFACE_INVENTORY_TMP"' EXIT
 
 expect_exit() {
   expected="$1"
@@ -88,7 +90,8 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --context-policy .agent-guard/context-policy.yaml \
   --schema-version v2 \
   --json \
-  > "$EVIDENCE_DIR/agent-surface-inventory.json"
+  > "$SURFACE_INVENTORY_TMP"
+mv "$SURFACE_INVENTORY_TMP" "$EVIDENCE_DIR/agent-surface-inventory.json"
 "$PYTHON_BIN" -m agent_guard.cli context lock \
   --root . \
   --policy .agent-guard/context-policy.yaml \
