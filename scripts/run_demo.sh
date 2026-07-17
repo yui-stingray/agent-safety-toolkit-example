@@ -28,6 +28,17 @@ CONTENT_TARGETS=(
   pyproject.toml
 )
 EVIDENCE_DIR=".agent-guard/evidence"
+SURFACE_INVENTORY_PATH="$EVIDENCE_DIR/agent-surface-inventory.json"
+SURFACE_INVENTORY_STAGE="$EVIDENCE_DIR/.agent-surface-inventory.json.tmp"
+SURFACE_INVENTORY_TMP=""
+
+cleanup() {
+  if [ -n "$SURFACE_INVENTORY_TMP" ]; then
+    rm -f -- "$SURFACE_INVENTORY_TMP"
+  fi
+  rm -f -- "$SURFACE_INVENTORY_STAGE"
+}
+trap cleanup EXIT
 
 expect_exit() {
   expected="$1"
@@ -42,12 +53,37 @@ expect_exit() {
   fi
 }
 
+surface_inventory_size_matches() {
+  "$PYTHON_BIN" - "$SURFACE_INVENTORY_PATH" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text(encoding="utf-8"))
+entry = next(
+    (
+        item
+        for item in payload["surface_inventory"]["surfaces"]
+        if item.get("path") == sys.argv[1]
+    ),
+    None,
+)
+raise SystemExit(0 if entry is not None and entry.get("size_bytes") == path.stat().st_size else 1)
+PY
+}
+
 "$PYTHON_BIN" scripts/policy_admit.py \
   --action read_docs \
   --repo yui-stingray/agent-safety-toolkit-example \
   --ownership-class internal
 
 mkdir -p "$EVIDENCE_DIR"
+cleanup
+if [ ! -e "$SURFACE_INVENTORY_PATH" ]; then
+  : > "$SURFACE_INVENTORY_PATH"
+fi
+SURFACE_INVENTORY_TMP="$(mktemp "${TMPDIR:-/tmp}/agent-surface-inventory.XXXXXX.json")"
 "$PYTHON_BIN" scripts/policy_admit.py \
   --action read_docs \
   --repo yui-stingray/agent-safety-toolkit-example \
@@ -83,12 +119,23 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
 "$PYTHON_BIN" -m agent_guard.cli path check --root . --policy .agent-guard/path-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli context check --root . --policy .agent-guard/context-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli context inventory --root . --policy .agent-guard/context-policy.yaml --json
-"$PYTHON_BIN" -m agent_guard.cli surface inventory \
-  --root . \
-  --context-policy .agent-guard/context-policy.yaml \
-  --schema-version v2 \
-  --json \
-  > "$EVIDENCE_DIR/agent-surface-inventory.json"
+for attempt in 1 2 3 4; do
+  "$PYTHON_BIN" -m agent_guard.cli surface inventory \
+    --root . \
+    --context-policy .agent-guard/context-policy.yaml \
+    --schema-version v2 \
+    --json \
+    > "$SURFACE_INVENTORY_TMP"
+  cp -- "$SURFACE_INVENTORY_TMP" "$SURFACE_INVENTORY_STAGE"
+  mv -- "$SURFACE_INVENTORY_STAGE" "$SURFACE_INVENTORY_PATH"
+  if surface_inventory_size_matches; then
+    break
+  fi
+  if [ "$attempt" -eq 4 ]; then
+    echo "surface inventory size did not stabilize" >&2
+    exit 1
+  fi
+done
 "$PYTHON_BIN" -m agent_guard.cli context lock \
   --root . \
   --policy .agent-guard/context-policy.yaml \
