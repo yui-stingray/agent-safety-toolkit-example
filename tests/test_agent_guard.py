@@ -228,6 +228,7 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     recipe = ADOPTION_RECIPE.read_text(encoding="utf-8")
     digest_policy = CONTEXT_DIGEST_POLICY.read_text(encoding="utf-8")
     update_script = (ROOT / "scripts" / "update_digests.py").read_text(encoding="utf-8")
+    requirements = (ROOT / "requirements" / "agent-safety-tools.txt").read_text(encoding="utf-8")
 
     assert '("policy_event_contract", "scripts/policy_event_contract.py")' in update_script
     assert "id: policy_event_contract" in digest_policy
@@ -235,6 +236,12 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "- `scripts/policy_event_contract.py`" in readme
     assert "- `scripts/policy_event_contract.py`" in recipe
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
+    assert "yui-agent-policy==0.1.7" in requirements
+    assert "72c1de9dd234531f91d6970cabc168874f9dd5f19c04907d22d1c7d4a80f622a" in requirements
+    assert "generic `agent-policy.audit_event.v1.1` JSON schema" in readme
+    assert "stricter public-artifact profile" in readme
+    assert "does not replace" in readme
+    assert "raw repo identifier, local path, or secret-shaped value checks" in readme
 
 
 def test_committed_adversarial_fixtures_are_inert_and_isolated() -> None:

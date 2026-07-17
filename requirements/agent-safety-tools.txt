@@ -25,5 +25,5 @@ typing-inspection==0.4.2 \
     --hash=sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7
 yui-agent-guard==0.3.0 \
     --hash=sha256:e274815408ba823ac4201d821e1e38614e9d42265f016dca9873ff664c83f106
-yui-agent-policy==0.1.6 \
-    --hash=sha256:a2d25c6c76301242614b50a701350e16af2b16023492954669c7e1a54acecfe7
+yui-agent-policy==0.1.7 \
+    --hash=sha256:72c1de9dd234531f91d6970cabc168874f9dd5f19c04907d22d1c7d4a80f622a
