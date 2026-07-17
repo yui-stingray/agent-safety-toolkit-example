@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -269,6 +271,53 @@ def test_committed_surface_inventory_reports_its_final_size() -> None:
     )
 
     assert self_entry["size_bytes"] == inventory_path.stat().st_size
+
+
+def test_demo_runner_bootstraps_missing_surface_inventory(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(
+        ROOT,
+        repo,
+        ignore=shutil.ignore_patterns(".git", ".venv", ".pytest_cache", "__pycache__"),
+    )
+    inventory_path = repo / ".agent-guard" / "evidence" / "agent-surface-inventory.json"
+    inventory_path.unlink()
+    stale_stage = inventory_path.with_name(".agent-surface-inventory.json.tmp")
+    stale_stage.write_text("stale stage\n", encoding="utf-8")
+    env = os.environ.copy()
+    env.update(
+        {
+            "PYTHON": sys.executable,
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": str(tmp_path),
+            "TEMP": str(tmp_path),
+            "TMP": str(tmp_path),
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", "scripts/run_demo.sh"],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(inventory_path.read_text(encoding="utf-8"))
+    self_entry = next(
+        item
+        for item in payload["surface_inventory"]["surfaces"]
+        if item.get("path") == ".agent-guard/evidence/agent-surface-inventory.json"
+    )
+    assert self_entry["size_bytes"] == inventory_path.stat().st_size
+    assert not stale_stage.exists()
+    assert all(
+        item.get("path") != ".agent-guard/evidence/.agent-surface-inventory.json.tmp"
+        for item in payload["surface_inventory"]["surfaces"]
+    )
 
 
 def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
