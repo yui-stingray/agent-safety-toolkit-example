@@ -237,8 +237,13 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "- `scripts/policy_event_contract.py`" in recipe
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
-        "yui-agent-policy==0.1.7 \\\n"
-        "    --hash=sha256:72c1de9dd234531f91d6970cabc168874f9dd5f19c04907d22d1c7d4a80f622a"
+        "yui-agent-guard==0.3.2 \\\n"
+        "    --hash=sha256:5063c2efbcd100ef6b12abd9a7820c383ccb3ffa90a173d375b2f79e61bf4bdc"
+        in requirements
+    )
+    assert (
+        "yui-agent-policy==0.1.9 \\\n"
+        "    --hash=sha256:f915f954e33c2d0f731084aa9b725503d65dfd91d35850a77181208469735a78"
         in requirements
     )
     assert "generic `agent-policy.audit_event.v1.1` JSON schema" in readme
