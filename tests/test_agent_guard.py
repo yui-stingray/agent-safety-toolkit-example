@@ -237,8 +237,8 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "- `scripts/policy_event_contract.py`" in recipe
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
-        "yui-agent-guard==0.3.2 \\\n"
-        "    --hash=sha256:5063c2efbcd100ef6b12abd9a7820c383ccb3ffa90a173d375b2f79e61bf4bdc"
+        "yui-agent-guard==0.3.3 \\\n"
+        "    --hash=sha256:a9ffaa995f092ce474ef62a7a9ab914b521e6fd3eaba79f72c8c6d0e6afc1ae7"
         in requirements
     )
     assert (
