@@ -31,6 +31,63 @@ def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
     )
 
 
+def run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    env = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith("GIT_")
+    }
+    env.update(
+        {
+            "GIT_ATTR_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_SYSTEM": os.devnull,
+        }
+    )
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+
+def copy_demo_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    ignored = shutil.ignore_patterns(".git", ".venv", ".pytest_cache", "__pycache__")
+    shutil.copytree(
+        ROOT,
+        repo,
+        ignore=ignored,
+    )
+    return repo
+
+
+def run_demo(repo: Path, *, temp_dir: Path) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "PYTHON": sys.executable,
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": str(temp_dir),
+            "TEMP": str(temp_dir),
+            "TMP": str(temp_dir),
+        }
+    )
+    return subprocess.run(
+        ["bash", "scripts/run_demo.sh"],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+
+
 def full_report_args(*, output: Path | None = None) -> tuple[str, ...]:
     args = [
         "report",
@@ -237,8 +294,8 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "- `scripts/policy_event_contract.py`" in recipe
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
-        "yui-agent-guard==0.3.3 \\\n"
-        "    --hash=sha256:a9ffaa995f092ce474ef62a7a9ab914b521e6fd3eaba79f72c8c6d0e6afc1ae7"
+        "yui-agent-guard==0.3.4 \\\n"
+        "    --hash=sha256:855589e93e6df34534c686969caa5d06e7aaa32ae4cb0ba1c70aadecca671bce"
         in requirements
     )
     assert (
@@ -289,36 +346,60 @@ def test_committed_surface_inventory_reports_its_final_size() -> None:
 
 
 def test_demo_runner_bootstraps_missing_surface_inventory(tmp_path: Path) -> None:
-    repo = tmp_path / "repo"
-    shutil.copytree(
-        ROOT,
-        repo,
-        ignore=shutil.ignore_patterns(".git", ".venv", ".pytest_cache", "__pycache__"),
-    )
+    repo = copy_demo_repo(tmp_path)
     inventory_path = repo / ".agent-guard" / "evidence" / "agent-surface-inventory.json"
     inventory_path.unlink()
     stale_stage = inventory_path.with_name(".agent-surface-inventory.json.tmp")
     stale_stage.write_text("stale stage\n", encoding="utf-8")
-    env = os.environ.copy()
-    env.update(
-        {
-            "PYTHON": sys.executable,
-            "PYTHONDONTWRITEBYTECODE": "1",
-            "TMPDIR": str(tmp_path),
-            "TEMP": str(tmp_path),
-            "TMP": str(tmp_path),
-        }
-    )
+    result = run_demo(repo, temp_dir=tmp_path)
 
-    result = subprocess.run(
-        ["bash", "scripts/run_demo.sh"],
-        cwd=repo,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=120,
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(inventory_path.read_text(encoding="utf-8"))
+    self_entries = [
+        item
+        for item in payload["surface_inventory"]["surfaces"]
+        if item.get("path") == ".agent-guard/evidence/agent-surface-inventory.json"
+    ]
+    assert self_entries == []
+    assert not stale_stage.exists()
+    assert all(
+        item.get("path") != ".agent-guard/evidence/.agent-surface-inventory.json.tmp"
+        for item in payload["surface_inventory"]["surfaces"]
     )
+    evidence_dir = inventory_path.parent
+    first_evidence = {
+        path.name: path.read_bytes()
+        for path in sorted(evidence_dir.glob("*.json"))
+    }
+
+    second_result = run_demo(repo, temp_dir=tmp_path)
+
+    assert second_result.returncode == 0, second_result.stdout + second_result.stderr
+    second_evidence = {
+        path.name: path.read_bytes()
+        for path in sorted(evidence_dir.glob("*.json"))
+    }
+    assert second_evidence == first_evidence
+
+
+def test_demo_runner_accepts_index_backed_surface_inventory_size(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    inventory_path = repo / ".agent-guard" / "evidence" / "agent-surface-inventory.json"
+    inventory_path.write_text(
+        inventory_path.read_text(encoding="utf-8") + (" " * 1024),
+        encoding="utf-8",
+    )
+    run_git(repo, "init", "-q")
+    run_git(repo, "add", ".")
+    indexed_size = int(
+        run_git(
+            repo,
+            "cat-file",
+            "-s",
+            ":.agent-guard/evidence/agent-surface-inventory.json",
+        ).stdout
+    )
+    result = run_demo(repo, temp_dir=tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(inventory_path.read_text(encoding="utf-8"))
@@ -327,12 +408,8 @@ def test_demo_runner_bootstraps_missing_surface_inventory(tmp_path: Path) -> Non
         for item in payload["surface_inventory"]["surfaces"]
         if item.get("path") == ".agent-guard/evidence/agent-surface-inventory.json"
     )
-    assert self_entry["size_bytes"] == inventory_path.stat().st_size
-    assert not stale_stage.exists()
-    assert all(
-        item.get("path") != ".agent-guard/evidence/.agent-surface-inventory.json.tmp"
-        for item in payload["surface_inventory"]["surfaces"]
-    )
+    assert self_entry["size_bytes"] == indexed_size
+    assert inventory_path.stat().st_size != indexed_size
 
 
 def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
