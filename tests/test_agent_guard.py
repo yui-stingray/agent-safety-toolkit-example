@@ -221,6 +221,24 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     ci_workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
     assert "docs/adoption-recipe.md" in readme
+    preview_heading = "## Preview the agent-guard starter plan"
+    copy_heading = "## Copy These Files"
+    assert preview_heading in recipe
+    assert copy_heading in recipe
+    preview_start = recipe.index(preview_heading)
+    copy_start = recipe.index(copy_heading)
+    assert preview_start < copy_start
+    preview_section = " ".join(recipe[preview_start:copy_start].split())
+    assert "https://github.com/yui-stingray/agent-guard#start-with-a-reviewed-bootstrap" in preview_section
+    assert "uvx " not in preview_section
+    assert "yui-agent-guard==" not in preview_section
+    assert "preview-only starter plan" in preview_section
+    assert "does not write files in the selected repository" in preview_section
+    assert "external caches" in preview_section
+    assert "only agent-guard static starter files" in preview_section
+    assert "does not install or configure agent-policy" in preview_section
+    assert "does not reproduce this combined demo" in preview_section
+    assert "only after deciding to adopt both layers" in preview_section
     assert ".agent-policy/policy.toml" in recipe
     assert ".agent-guard/context-policy.yaml" in recipe
     assert ".agent-guard/mcp-policy.yaml" in recipe
