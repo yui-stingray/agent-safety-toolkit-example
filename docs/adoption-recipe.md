@@ -4,6 +4,16 @@ This demo is meant to be copied into a public repository and then adapted. Do
 not copy local machine paths, generated private evidence, personal hook config,
 or private repository examples.
 
+## Preview the agent-guard starter plan
+
+Before copying this full combined demo, evaluators can inspect
+[agent-guard's preview-only starter plan](https://github.com/yui-stingray/agent-guard#start-with-a-reviewed-bootstrap).
+The preview does not write files in the selected repository, though it may
+populate external caches. It covers only agent-guard static starter files: it
+does not install or configure agent-policy, and it does not reproduce this
+combined demo. Continue with this recipe only after deciding to adopt both
+layers.
+
 ## Copy These Files
 
 Start with these files:
