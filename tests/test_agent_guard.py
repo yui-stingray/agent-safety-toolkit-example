@@ -52,18 +52,24 @@ def run_demo(
     repo: Path,
     *,
     temp_dir: Path,
-    python_bin: str | Path = sys.executable,
+    python_bin: str | Path | None = sys.executable,
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(
         {
-            "PYTHON": str(python_bin),
             "PYTHONDONTWRITEBYTECODE": "1",
             "TMPDIR": str(temp_dir),
             "TEMP": str(temp_dir),
             "TMP": str(temp_dir),
         }
     )
+    if python_bin is None:
+        env.pop("PYTHON", None)
+    else:
+        env["PYTHON"] = str(python_bin)
+    if extra_env is not None:
+        env.update(extra_env)
     return subprocess.run(
         ["bash", "scripts/run_demo.sh"],
         cwd=repo,
@@ -344,7 +350,9 @@ def test_committed_adversarial_fixtures_are_inert_and_isolated() -> None:
 
 
 def test_committed_public_bundle_matches_consumer_contract() -> None:
-    assert {path.name for path in EVIDENCE_DIR.iterdir() if path.is_file()} == PUBLIC_BUNDLE_FILENAMES
+    entries = list(EVIDENCE_DIR.iterdir())
+    assert {path.name for path in entries} == PUBLIC_BUNDLE_FILENAMES
+    assert all(path.is_file() and not path.is_symlink() for path in entries)
 
     result = subprocess.run(
         [
@@ -368,11 +376,12 @@ def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> N
     repo = copy_demo_repo(tmp_path)
     evidence_dir = repo / ".agent-guard" / "evidence"
     audit_event = repo / ".agent-policy" / "evidence" / "policy-admission-event.json"
-    (evidence_dir / "agent-guard-report.md").write_text("stale\n", encoding="utf-8")
     result = run_demo(repo, temp_dir=tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert {path.name for path in evidence_dir.iterdir() if path.is_file()} == PUBLIC_BUNDLE_FILENAMES
+    entries = list(evidence_dir.iterdir())
+    assert {path.name for path in entries} == PUBLIC_BUNDLE_FILENAMES
+    assert all(path.is_file() and not path.is_symlink() for path in entries)
     first_evidence = {path.name: path.read_bytes() for path in sorted(evidence_dir.glob("*.json"))}
     first_event = audit_event.read_bytes()
 
@@ -382,6 +391,31 @@ def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> N
     second_evidence = {path.name: path.read_bytes() for path in sorted(evidence_dir.glob("*.json"))}
     assert second_evidence == first_evidence
     assert audit_event.read_bytes() == first_event
+
+
+def test_demo_runner_uses_compatible_python3_before_incompatible_python(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    compatible_python = bin_dir / "python3"
+    compatible_python.write_text(
+        f'#!/usr/bin/env bash\nexec "{sys.executable}" "$@"\n',
+        encoding="utf-8",
+    )
+    compatible_python.chmod(0o755)
+    for name in ("python3.12", "python"):
+        incompatible_python = bin_dir / name
+        incompatible_python.write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
+        incompatible_python.chmod(0o755)
+
+    result = run_demo(
+        repo,
+        temp_dir=tmp_path,
+        python_bin=None,
+        extra_env={"PATH": f"{bin_dir}:/usr/bin:/bin"},
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_demo_runner_restores_previous_evidence_after_failure(tmp_path: Path) -> None:
@@ -400,6 +434,29 @@ def test_demo_runner_restores_previous_evidence_after_failure(tmp_path: Path) ->
     assert result.returncode != 0
     after_bundle = {path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()}
     assert after_bundle == before_bundle
+    assert audit_event.read_bytes() == before_event
+    assert not list(tmp_path.glob(".agent-safety-toolkit-example-evidence.*"))
+
+
+def test_demo_runner_rejects_unexpected_evidence_without_deleting_it(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    evidence_dir = repo / ".agent-guard" / "evidence"
+    audit_event = repo / ".agent-policy" / "evidence" / "policy-admission-event.json"
+    before_bundle = {path.name: path.read_bytes() for path in evidence_dir.iterdir()}
+    before_event = audit_event.read_bytes()
+    unexpected = evidence_dir / "agent-guard-report.md"
+    unexpected.write_text("local evidence\n", encoding="utf-8")
+
+    result = run_demo(repo, temp_dir=tmp_path)
+
+    assert result.returncode != 0
+    assert unexpected.read_text(encoding="utf-8") == "local evidence\n"
+    remaining_bundle = {
+        path.name: path.read_bytes()
+        for path in evidence_dir.iterdir()
+        if path != unexpected
+    }
+    assert remaining_bundle == before_bundle
     assert audit_event.read_bytes() == before_event
     assert not list(tmp_path.glob(".agent-safety-toolkit-example-evidence.*"))
 

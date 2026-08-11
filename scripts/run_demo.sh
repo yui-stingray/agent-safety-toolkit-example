@@ -4,15 +4,19 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-if [ -n "${PYTHON:-}" ]; then
-  PYTHON_BIN="$PYTHON"
-elif command -v python3.12 >/dev/null 2>&1; then
-  PYTHON_BIN="python3.12"
-elif command -v python >/dev/null 2>&1; then
-  PYTHON_BIN="python"
-elif command -v python3 >/dev/null 2>&1; then
-  PYTHON_BIN="python3"
-else
+PYTHON_BIN="${PYTHON:-}"
+if [ -z "$PYTHON_BIN" ]; then
+  for candidate in python3.12 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 \
+      && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)'
+    then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  done
+fi
+
+if [ -z "$PYTHON_BIN" ]; then
   echo "Python 3.12 is required; set PYTHON to a Python 3.12 executable." >&2
   exit 1
 fi
@@ -63,6 +67,29 @@ do
     exit 1
   fi
 done
+
+if [ -e "$EVIDENCE_DIR" ] && [ ! -d "$EVIDENCE_DIR" ]; then
+  echo "The evidence path must be a regular directory." >&2
+  exit 1
+fi
+
+if [ -d "$EVIDENCE_DIR" ]; then
+  "$PYTHON_BIN" - "$EVIDENCE_DIR" <<'PY'
+import sys
+from pathlib import Path
+
+evidence_dir = Path(sys.argv[1])
+expected = {"agent-guard-evidence-pack.json", "agent-guard-report.json"}
+entries = list(evidence_dir.iterdir())
+if (
+    {entry.name for entry in entries} - expected
+    or any(entry.is_symlink() or not entry.is_file() for entry in entries)
+):
+    raise SystemExit(
+        "Evidence directory contains unexpected entries; move them before running the demo."
+    )
+PY
+fi
 
 cleanup() {
   status="$?"

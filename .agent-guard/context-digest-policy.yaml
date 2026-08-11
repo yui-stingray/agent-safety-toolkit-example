@@ -5,7 +5,7 @@ checks:
     sha256: 1836da432c9a190aa0d086ec8e45fe7733fdaf0ba592d5f2949849a81346e863
   - id: readme
     path: README.md
-    sha256: 535822428fd80e32a70a55649231984f83fd9040fad898878134c4e6fa72c83f
+    sha256: 42eec3ead81b86b4de2c3c52087e42d6c54aa5ac5399e2532e99db14fe0898db
   - id: policy_event_contract
     path: scripts/policy_event_contract.py
     sha256: 830d3137d8c18fdd486a4e77cad7fd8fd0cc14e57c8bac7136a881334856f74a

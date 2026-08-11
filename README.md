@@ -147,8 +147,13 @@ The fixed public `agent-guard` bundle under `.agent-guard/evidence/` contains:
 The runner snapshots the previous complete evidence set, generates and
 validates its replacement with the installed `agent-guard` consumer, and
 restores the snapshot on failure instead of leaving mixed files.
+It refuses to replace a bundle directory containing unexpected entries, so
+unrelated local evidence is not deleted implicitly.
 The standalone surface inventory command remains a local/CI check; this demo
 uses the identical section embedded in the report as the public handoff.
+The manifest intentionally references the separately stored, sanitized runtime
+admission event so reviewers can correlate the two evidence layers without
+co-locating the event in the static bundle directory.
 
 ## Updating Digests
 
