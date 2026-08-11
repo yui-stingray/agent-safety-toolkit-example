@@ -4,12 +4,13 @@ Describe the change and why it is needed.
 
 ## Verification
 
-- [ ] `python3 -m pytest -q`
+- [ ] `python -m pytest -q`
 - [ ] `bash scripts/run_demo.sh`
 - [ ] `agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json`
 - [ ] `agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml`
 - [ ] `agent-guard conformance check --root . --evidence .agent-guard/evidence/agent-guard-report.json --profile recommended --json`
-- [ ] `python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json`
+- [ ] `python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json`
+- [ ] `python -m agent_guard.consumer --evidence-dir .agent-guard/evidence .agent-guard/evidence/agent-guard-report.json`
 
 ## Safety check
 

@@ -129,6 +129,8 @@ def test_audit_event_is_deterministic_and_wrapper_owned() -> None:
         "read_docs",
         "--repo",
         "yui-stingray/agent-safety-toolkit-example",
+        "--repo-alias",
+        "agent-safety-toolkit-example-public",
         "--ownership-class",
         "internal",
         "--audit-event",
@@ -144,12 +146,12 @@ def test_audit_event_is_deterministic_and_wrapper_owned() -> None:
         "command": "read_docs",
         "context": {"ownership_class": "internal"},
         "decision": {
-            "matched_repo": "yui-stingray/agent-safety-toolkit-example",
+            "matched_repo": "agent-safety-toolkit-example-public",
             "mode": "auto_allow",
             "reason": "repo_policy",
         },
         "path": "README.md",
-        "repo": "yui-stingray/agent-safety-toolkit-example",
+        "repo": "agent-safety-toolkit-example-public",
     }
     assert "event_id" not in payload
     assert "timestamp" not in payload
@@ -202,6 +204,8 @@ def test_audit_event_rejects_absolute_path() -> None:
         "read_docs",
         "--repo",
         "yui-stingray/agent-safety-toolkit-example",
+        "--repo-alias",
+        "agent-safety-toolkit-example-public",
         "--ownership-class",
         "internal",
         "--audit-event",
@@ -223,6 +227,8 @@ def test_audit_event_rejects_windows_local_path() -> None:
             "read_docs",
             "--repo",
             "yui-stingray/agent-safety-toolkit-example",
+            "--repo-alias",
+            "agent-safety-toolkit-example-public",
             "--ownership-class",
             "internal",
             "--audit-event",
@@ -245,6 +251,8 @@ def test_audit_event_rejects_local_path_shorthand_and_uri() -> None:
             "read_docs",
             "--repo",
             "yui-stingray/agent-safety-toolkit-example",
+            "--repo-alias",
+            "agent-safety-toolkit-example-public",
             "--ownership-class",
             "internal",
             "--audit-event",
@@ -263,6 +271,8 @@ def test_audit_event_rejects_secret_shaped_session_id() -> None:
         "read_docs",
         "--repo",
         "yui-stingray/agent-safety-toolkit-example",
+        "--repo-alias",
+        "agent-safety-toolkit-example-public",
         "--ownership-class",
         "internal",
         "--audit-event",
@@ -281,6 +291,8 @@ def test_audit_event_rejects_command_text() -> None:
         "read_docs",
         "--repo",
         "yui-stingray/agent-safety-toolkit-example",
+        "--repo-alias",
+        "agent-safety-toolkit-example-public",
         "--ownership-class",
         "internal",
         "--audit-event",
@@ -373,12 +385,13 @@ def test_module_execution_uses_repo_contract_instead_of_cwd_shadow(tmp_path: Pat
     }
 
 
-def test_public_audit_event_validator_rejects_raw_repo_identifier(tmp_path: Path) -> None:
+def test_audit_event_requires_alias_without_emitting_raw_repo() -> None:
+    raw_repo = "private-repository-label"
     code, payload = run_admit(
         "--action",
         "read_docs",
         "--repo",
-        "yui-stingray/agent-safety-toolkit-example",
+        raw_repo,
         "--ownership-class",
         "internal",
         "--audit-event",
@@ -388,12 +401,35 @@ def test_public_audit_event_validator_rejects_raw_repo_identifier(tmp_path: Path
         "README.md",
     )
 
-    assert code == 0
-    result = run_validator(write_json(tmp_path / "policy-admission-event.json", payload))
+    assert code == 1
+    assert payload["status"] == "error"
+    assert payload["error"] == "repo-alias is required when --audit-event is used"
+    assert raw_repo not in json.dumps(payload, sort_keys=True)
+
+
+def test_policy_load_error_does_not_emit_path(tmp_path: Path) -> None:
+    marker = "not-public-policy-location"
+    missing_policy = tmp_path / marker / "policy.toml"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--policy",
+            str(missing_policy),
+            "--action",
+            "read_docs",
+            "--repo",
+            "yui-stingray/agent-safety-toolkit-example",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
     assert result.returncode == 1
-    combined = result.stdout + result.stderr
-    assert "repo must be a public-safe repository alias" in combined
-    assert "yui-stingray/agent-safety-toolkit-example" not in combined
+    assert marker not in result.stdout + result.stderr
+    assert json.loads(result.stdout)["error"] == "policy evaluation failed"
 
 
 def test_public_audit_event_validator_rejects_unsupported_shape(tmp_path: Path) -> None:

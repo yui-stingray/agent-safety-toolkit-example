@@ -70,17 +70,21 @@ agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --ch
 Run the same checks locally before enabling the workflow:
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 . .venv/bin/activate
-python3 -m pip install --require-hashes -r requirements/agent-safety-tools.txt
-python3 -m pytest -q
+python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
+# Run this after adding or adapting the target repository's tests.
+python -m pytest -q
 bash scripts/run_demo.sh
-python3 scripts/validate_policy_event.py .agent-guard/evidence/policy-admission-event.json
-python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json
+python scripts/validate_policy_event.py .agent-policy/evidence/policy-admission-event.json
+python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json
+python -m agent_guard.consumer --evidence-dir .agent-guard/evidence .agent-guard/evidence/agent-guard-report.json
 ```
 
 If dependency hashes do not match on the target platform, regenerate the lock
 file for that platform instead of removing hash checking.
+The checked-in lock targets Python 3.12 on Ubuntu Linux, and `run_demo.sh`
+rejects a different interpreter. Set `PYTHON` explicitly when needed.
 
 ## Do Not Copy
 
@@ -91,8 +95,8 @@ Do not copy or publish:
 - private corpora, bypass corpora, red-team transcripts, or personal notes;
 - generated evidence from a private repository unless it has been reviewed and
   is known to be sanitized;
-- `agent-policy` audit events created without a public-safe `--repo-alias`
-  when the raw repository identifier is private;
+- `agent-policy` audit events created without the required public-safe
+  `--repo-alias`;
 - raw per-scanner JSON from a private repository unless a maintainer has
   reviewed that exact output;
 - hook config with personal absolute paths.
@@ -108,11 +112,9 @@ logic, or CI guard commands, review:
 - the `agent-policy` runtime admission decision or audit event;
 - the public audit-event schema validation result;
 - the `agent-guard` context inventory and context lock coverage;
-- the `agent-guard` surface inventory v2 and evidence-pack manifest, including
-  a sanitized `agent-policy` audit-event artifact reference;
-- whether `agent-surface-inventory.json` is listed as a generic `report`
-  artifact by the pinned `agent-guard` release, and whether the path plus
-  embedded `surface_inventory` section are sufficient for the handoff;
+- the `agent-guard` surface inventory v2 embedded in the report and the
+  matching evidence-pack manifest, including a sanitized `agent-policy`
+  audit-event artifact reference;
 - the recommended-profile conformance result;
 - digest drift for pinned safety-critical files;
 - workflow drift for required guard commands;

@@ -33,4 +33,4 @@ workflow_checks:
       - id: demo_script
         command: bash scripts/run_demo.sh
       - id: evidence_freshness
-        command: git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json .agent-guard/evidence/agent-surface-inventory.json .agent-guard/evidence/evidence-pack-manifest.json .agent-guard/evidence/policy-admission-event.json
+        command: git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json .agent-guard/evidence/agent-guard-evidence-pack.json .agent-policy/evidence/policy-admission-event.json

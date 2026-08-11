@@ -4,12 +4,26 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-if [ -n "${PYTHON:-}" ]; then
-  PYTHON_BIN="$PYTHON"
-elif command -v python3 >/dev/null 2>&1; then
-  PYTHON_BIN="python3"
-else
-  PYTHON_BIN="python"
+PYTHON_BIN="${PYTHON:-}"
+if [ -z "$PYTHON_BIN" ]; then
+  for candidate in python3.12 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 \
+      && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)'
+    then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  done
+fi
+
+if [ -z "$PYTHON_BIN" ]; then
+  echo "Python 3.12 is required; set PYTHON to a Python 3.12 executable." >&2
+  exit 1
+fi
+
+if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)'; then
+  echo "Python 3.12 is required; set PYTHON to a Python 3.12 executable." >&2
+  exit 1
 fi
 
 CONTENT_TARGETS=(
@@ -28,15 +42,79 @@ CONTENT_TARGETS=(
   pyproject.toml
 )
 EVIDENCE_DIR=".agent-guard/evidence"
-SURFACE_INVENTORY_PATH="$EVIDENCE_DIR/agent-surface-inventory.json"
-SURFACE_INVENTORY_STAGE="$EVIDENCE_DIR/.agent-surface-inventory.json.tmp"
+AUDIT_EVENT_DIR=".agent-policy/evidence"
+AUDIT_EVENT_PATH="$AUDIT_EVENT_DIR/policy-admission-event.json"
+AUDIT_EVENT_STAGE="$AUDIT_EVENT_DIR/.policy-admission-event.json.tmp"
 SURFACE_INVENTORY_TMP=""
+REPORT_PATH="$EVIDENCE_DIR/agent-guard-report.json"
+EVIDENCE_PACK_PATH="$EVIDENCE_DIR/agent-guard-evidence-pack.json"
+EVIDENCE_PACK_STAGE="$EVIDENCE_DIR/.agent-guard-evidence-pack.json.tmp"
+BACKUP_DIR=""
+BACKUP_READY=0
+EVIDENCE_EXISTED=0
+AUDIT_EVENT_EXISTED=0
+PUBLISH_COMPLETE=0
+
+for evidence_path in \
+  ".agent-guard" \
+  "$EVIDENCE_DIR" \
+  ".agent-policy" \
+  "$AUDIT_EVENT_DIR" \
+  "$AUDIT_EVENT_PATH"
+do
+  if [ -L "$evidence_path" ]; then
+    echo "Evidence directories and artifact paths must not be symbolic links." >&2
+    exit 1
+  fi
+done
+
+if [ -e "$EVIDENCE_DIR" ] && [ ! -d "$EVIDENCE_DIR" ]; then
+  echo "The evidence path must be a regular directory." >&2
+  exit 1
+fi
+
+if [ -d "$EVIDENCE_DIR" ]; then
+  "$PYTHON_BIN" - "$EVIDENCE_DIR" <<'PY'
+import sys
+from pathlib import Path
+
+evidence_dir = Path(sys.argv[1])
+expected = {"agent-guard-evidence-pack.json", "agent-guard-report.json"}
+entries = list(evidence_dir.iterdir())
+if (
+    {entry.name for entry in entries} - expected
+    or any(entry.is_symlink() or not entry.is_file() for entry in entries)
+):
+    raise SystemExit(
+        "Evidence directory contains unexpected entries; move them before running the demo."
+    )
+PY
+fi
 
 cleanup() {
+  status="$?"
+  trap - EXIT
+  set +e
   if [ -n "$SURFACE_INVENTORY_TMP" ]; then
     rm -f -- "$SURFACE_INVENTORY_TMP"
   fi
-  rm -f -- "$SURFACE_INVENTORY_STAGE"
+  rm -f -- "$AUDIT_EVENT_STAGE" "$EVIDENCE_PACK_STAGE"
+  if [ "$BACKUP_READY" -eq 1 ] && [ "$PUBLISH_COMPLETE" -ne 1 ]; then
+    rm -rf -- "$EVIDENCE_DIR"
+    if [ "$EVIDENCE_EXISTED" -eq 1 ]; then
+      mkdir -p -- "$(dirname "$EVIDENCE_DIR")"
+      mv -- "$BACKUP_DIR/agent-guard-evidence" "$EVIDENCE_DIR"
+    fi
+    rm -f -- "$AUDIT_EVENT_PATH"
+    if [ "$AUDIT_EVENT_EXISTED" -eq 1 ]; then
+      mkdir -p -- "$AUDIT_EVENT_DIR"
+      mv -- "$BACKUP_DIR/policy-admission-event.json" "$AUDIT_EVENT_PATH"
+    fi
+  fi
+  if [ -n "$BACKUP_DIR" ]; then
+    rm -rf -- "$BACKUP_DIR"
+  fi
+  exit "$status"
 }
 trap cleanup EXIT
 
@@ -58,8 +136,20 @@ expect_exit() {
   --repo yui-stingray/agent-safety-toolkit-example \
   --ownership-class internal
 
-mkdir -p "$EVIDENCE_DIR"
-cleanup
+BACKUP_DIR="$(mktemp -d "$ROOT/../.agent-safety-toolkit-example-evidence.XXXXXX")"
+if [ -d "$EVIDENCE_DIR" ]; then
+  cp -a -- "$EVIDENCE_DIR" "$BACKUP_DIR/agent-guard-evidence"
+  EVIDENCE_EXISTED=1
+fi
+if [ -f "$AUDIT_EVENT_PATH" ]; then
+  cp -p -- "$AUDIT_EVENT_PATH" "$BACKUP_DIR/policy-admission-event.json"
+  AUDIT_EVENT_EXISTED=1
+fi
+BACKUP_READY=1
+
+rm -rf -- "$EVIDENCE_DIR"
+mkdir -p "$EVIDENCE_DIR" "$AUDIT_EVENT_DIR"
+rm -f -- "$AUDIT_EVENT_STAGE" "$EVIDENCE_PACK_STAGE"
 SURFACE_INVENTORY_TMP="$(mktemp "${TMPDIR:-/tmp}/agent-surface-inventory.XXXXXX.json")"
 "$PYTHON_BIN" scripts/policy_admit.py \
   --action read_docs \
@@ -69,8 +159,9 @@ SURFACE_INVENTORY_TMP="$(mktemp "${TMPDIR:-/tmp}/agent-surface-inventory.XXXXXX.
   --audit-event \
   --command read_docs \
   --path README.md \
-  > "$EVIDENCE_DIR/policy-admission-event.json"
-"$PYTHON_BIN" scripts/validate_policy_event.py "$EVIDENCE_DIR/policy-admission-event.json"
+  > "$AUDIT_EVENT_STAGE"
+"$PYTHON_BIN" scripts/validate_policy_event.py "$AUDIT_EVENT_STAGE"
+mv -- "$AUDIT_EVENT_STAGE" "$AUDIT_EVENT_PATH"
 
 expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --action edit_docs \
@@ -102,8 +193,6 @@ expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
   --schema-version v2 \
   --json \
   > "$SURFACE_INVENTORY_TMP"
-cp -- "$SURFACE_INVENTORY_TMP" "$SURFACE_INVENTORY_STAGE"
-mv -- "$SURFACE_INVENTORY_STAGE" "$SURFACE_INVENTORY_PATH"
 "$PYTHON_BIN" -m agent_guard.cli context lock \
   --root . \
   --policy .agent-guard/context-policy.yaml \
@@ -128,20 +217,23 @@ mv -- "$SURFACE_INVENTORY_STAGE" "$SURFACE_INVENTORY_PATH"
   --api-policy .agent-guard/api-policy.yaml \
   --mcp-policy .agent-guard/mcp-policy.yaml \
   --digest-policy .agent-guard/context-digest-policy.yaml \
-  --agent-policy-audit-event "$EVIDENCE_DIR/policy-admission-event.json" \
+  --agent-policy-audit-event "$AUDIT_EVENT_PATH" \
   --format json \
-  --output "$EVIDENCE_DIR/agent-guard-report.json"
+  --output "$REPORT_PATH"
 "$PYTHON_BIN" -m agent_guard.cli conformance check \
   --root . \
-  --evidence "$EVIDENCE_DIR/agent-guard-report.json" \
+  --evidence "$REPORT_PATH" \
   --profile recommended \
   --json
 "$PYTHON_BIN" -m agent_guard.cli evidence-pack manifest \
   --root . \
-  --report "$EVIDENCE_DIR/agent-guard-report.json" \
-  --artifact "$EVIDENCE_DIR/agent-surface-inventory.json" \
-  --artifact "$EVIDENCE_DIR/agent-guard-report.json" \
-  --agent-policy-audit-event "$EVIDENCE_DIR/policy-admission-event.json" \
+  --report "$REPORT_PATH" \
+  --artifact "$REPORT_PATH" \
+  --agent-policy-audit-event "$AUDIT_EVENT_PATH" \
   --json \
-  > "$EVIDENCE_DIR/evidence-pack-manifest.json"
-"$PYTHON_BIN" examples/evidence_consumer.py "$EVIDENCE_DIR/agent-guard-report.json"
+  > "$EVIDENCE_PACK_STAGE"
+mv -- "$EVIDENCE_PACK_STAGE" "$EVIDENCE_PACK_PATH"
+"$PYTHON_BIN" examples/evidence_consumer.py "$REPORT_PATH"
+"$PYTHON_BIN" -m agent_guard.consumer --evidence-dir "$EVIDENCE_DIR" "$REPORT_PATH"
+
+PUBLISH_COMPLETE=1

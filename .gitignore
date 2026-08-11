@@ -17,6 +17,6 @@ week-logs/
 .codex/
 .agent-guard/evidence/*
 !.agent-guard/evidence/agent-guard-report.json
-!.agent-guard/evidence/agent-surface-inventory.json
-!.agent-guard/evidence/evidence-pack-manifest.json
-!.agent-guard/evidence/policy-admission-event.json
+!.agent-guard/evidence/agent-guard-evidence-pack.json
+.agent-policy/evidence/*
+!.agent-policy/evidence/policy-admission-event.json
