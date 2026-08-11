@@ -97,52 +97,75 @@ def emit(payload: dict[str, object]) -> None:
     print(json.dumps(payload, sort_keys=True))
 
 
+def emit_error(*, action: str, capability: str, message: str) -> int:
+    emit(
+        {
+            "status": "error",
+            "action": action,
+            "capability": capability,
+            "error": message,
+        }
+    )
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(argv if argv is not None else sys.argv[1:]))
     capability = ACTION_CAPABILITIES[args.action]
 
     try:
-        policy = load_policy_file(Path(args.policy))
-        context = build_context(args)
         audit_repo_alias = safe_optional_repo_alias(args.repo_alias)
         audit_command = safe_optional_label(args.command, field="command")
         audit_session_id = safe_optional_label(args.session_id, field="session-id")
         audit_path = safe_optional_repo_path(args.path)
+    except ValueError as exc:
+        return emit_error(action=args.action, capability=capability, message=str(exc))
+
+    if args.audit_event and audit_repo_alias is None:
+        return emit_error(
+            action=args.action,
+            capability=capability,
+            message="repo-alias is required when --audit-event is used",
+        )
+
+    try:
+        policy = load_policy_file(Path(args.policy))
+        context = build_context(args)
         decision = evaluate(
             policy,
             repo=args.repo,
             capability=capability,
             context=context,
         )
-    except Exception as exc:
-        emit(
-            {
-                "status": "error",
-                "action": args.action,
-                "capability": capability,
-                "error": str(exc),
-            }
+    except Exception:
+        return emit_error(
+            action=args.action,
+            capability=capability,
+            message="policy evaluation failed",
         )
-        return 1
 
     if args.audit_event:
-        audit_repo = audit_repo_alias or args.repo
-        audit_decision = decision
-        if audit_repo_alias is not None:
-            audit_decision = PolicyDecision(
-                mode=decision.mode,
-                reason=decision.reason,
-                matched_repo=audit_repo if decision.matched_repo is not None else None,
-            )
-        event = build_audit_event(
-            repo=audit_repo,
-            capability=capability,
-            context=context,
-            decision=audit_decision,
-            session_id=audit_session_id,
-            command=audit_command,
-            path=audit_path,
+        audit_decision = PolicyDecision(
+            mode=decision.mode,
+            reason=decision.reason,
+            matched_repo=audit_repo_alias if decision.matched_repo is not None else None,
         )
+        try:
+            event = build_audit_event(
+                repo=audit_repo_alias,
+                capability=capability,
+                context=context,
+                decision=audit_decision,
+                session_id=audit_session_id,
+                command=audit_command,
+                path=audit_path,
+            )
+        except Exception:
+            return emit_error(
+                action=args.action,
+                capability=capability,
+                message="audit event generation failed",
+            )
         print(audit_event_to_json(event))
     else:
         payload = {

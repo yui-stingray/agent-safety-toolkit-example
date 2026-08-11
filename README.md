@@ -31,7 +31,7 @@ For copying the pattern into another repository, use
 - pin safety-critical file digests so drift is visible in CI
 - emit a sanitized JSON evidence report for reviewers and automation
 
-Together they cover different layers. `agent-policy` answers "may this agent action continue now?" while `agent-guard` answers "does this repository still look safe to publish and operate?"
+Together they cover different layers. `agent-policy` answers "may this agent action continue now?" while `agent-guard` answers "does this repository satisfy the selected deterministic static evidence profile?"
 The demo pairs one runtime admission audit event with one static guard evidence
 report so maintainers can review both sides without storing raw prompts,
 repository contents, hashes, tokens, or local paths.
@@ -64,9 +64,9 @@ python3 scripts/policy_admit.py --action read_docs --repo yui-stingray/agent-saf
 ```
 
 `--repo` is the identifier evaluated against `.agent-policy/policy.toml`.
-Audit events are public evidence, so use `--repo-alias` when the raw repository
-name should not appear in the published event. Without an alias, the raw
-`repo` value and matching decision repo are emitted into the audit-event JSON.
+Audit events are public evidence, so `--repo-alias` is required with
+`--audit-event`; the raw repository identifier is never used as an audit-event
+fallback.
 `scripts/validate_policy_event.py` validates the committed public audit-event
 artifact and rejects raw repository identifiers, local paths, unsupported
 fields, and secret-shaped values before `agent-guard` references it.
@@ -80,12 +80,16 @@ the demo's raw repo identifier, local path, or secret-shaped value checks.
 This demo pins dependencies with hashes for Python 3.12 on Ubuntu Linux, which is also the CI target.
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 . .venv/bin/activate
-python3 -m pip install --require-hashes -r requirements/agent-safety-tools.txt
-python3 -m pytest -q
+python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
+python -m pytest -q
 bash scripts/run_demo.sh
 ```
+
+`scripts/run_demo.sh` rejects non-3.12 interpreters. Set `PYTHON` to an
+explicit Python 3.12 executable when the activated environment is not first on
+`PATH`.
 
 The end-to-end script runs:
 
@@ -114,7 +118,7 @@ agent-guard surface inventory --root . --context-policy .agent-guard/context-pol
 agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json
 agent-guard workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
 agent-guard drift check --root . --profile recommended --schema-version v2 --json
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
 ```
 
 Treat the individual per-scanner `--json` outputs above as local inspection or
@@ -125,24 +129,26 @@ output. The MCP config guard reads committed configuration metadata only. It
 does not execute MCP servers, validate live OAuth flows, inspect MCP tool
 results, or detect MCP tool-poisoning behavior.
 
-It writes generated evidence files under `.agent-guard/evidence/`:
+It writes the runtime admission artifact separately under
+`.agent-policy/evidence/`:
 
 - `policy-admission-event.json`: deterministic `agent-policy` runtime
   admission evidence for one normalized action.
-- `agent-surface-inventory.json`: sanitized `agent-guard` surface inventory v2
-  metadata for context files, policy files, workflows, documented guard
-  commands, and evidence artifacts.
+
+The fixed public `agent-guard` bundle under `.agent-guard/evidence/` contains:
+
 - `agent-guard-report.json`: sanitized `agent-guard` static repository
-  evidence, including context lock coverage, workflow drift, profile
-  conformance, and an embedded evidence-pack manifest with a sanitized
-  `agent-policy` audit-event artifact reference.
-- `evidence-pack-manifest.json`: compact artifact index for reviewer handoff,
+  evidence, including surface inventory v2, context lock coverage, workflow
+  drift, profile conformance, and an embedded evidence-pack manifest with a
+  sanitized `agent-policy` audit-event artifact reference.
+- `agent-guard-evidence-pack.json`: compact artifact index for reviewer handoff,
   including the report and `agent-policy` audit-event artifact references.
 
-The current pinned `agent-guard` release records standalone
-`agent-surface-inventory.json` manifest entries with the generic `report` role.
-Treat the file path and the embedded `surface_inventory` section as the surface
-inventory contract until a pinned release exposes distinct artifact roles.
+The runner snapshots the previous complete evidence set, generates and
+validates its replacement with the installed `agent-guard` consumer, and
+restores the snapshot on failure instead of leaving mixed files.
+The standalone surface inventory command remains a local/CI check; this demo
+uses the identical section embedded in the report as the public handoff.
 
 ## Updating Digests
 
@@ -163,7 +169,7 @@ After an intentional change to one of those files:
 python3 scripts/update_digests.py
 agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml
 agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
 ```
 
 ## Public Safety Scope

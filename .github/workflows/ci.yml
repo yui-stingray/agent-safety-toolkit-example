@@ -43,4 +43,4 @@ jobs:
         run: bash scripts/run_demo.sh
 
       - name: Verify committed evidence samples are current
-        run: git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json .agent-guard/evidence/agent-surface-inventory.json .agent-guard/evidence/evidence-pack-manifest.json .agent-guard/evidence/policy-admission-event.json
+        run: git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json .agent-guard/evidence/agent-guard-evidence-pack.json .agent-policy/evidence/policy-admission-event.json

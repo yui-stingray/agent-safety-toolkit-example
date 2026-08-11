@@ -19,6 +19,12 @@ CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 EVIDENCE_CONSUMER = ROOT / "examples" / "evidence_consumer.py"
 RUN_DEMO = ROOT / "scripts" / "run_demo.sh"
 ADVERSARIAL_FIXTURES = ROOT / "fixtures" / "adversarial"
+EVIDENCE_DIR = ROOT / ".agent-guard" / "evidence"
+AUDIT_EVENT = ROOT / ".agent-policy" / "evidence" / "policy-admission-event.json"
+PUBLIC_BUNDLE_FILENAMES = {
+    "agent-guard-evidence-pack.json",
+    "agent-guard-report.json",
+}
 
 
 def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
@@ -28,30 +34,6 @@ def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
         text=True,
         capture_output=True,
         check=False,
-    )
-
-
-def run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    env = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.startswith("GIT_")
-    }
-    env.update(
-        {
-            "GIT_ATTR_NOSYSTEM": "1",
-            "GIT_CONFIG_GLOBAL": os.devnull,
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_CONFIG_SYSTEM": os.devnull,
-        }
-    )
-    return subprocess.run(
-        ["git", *args],
-        cwd=repo,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=True,
     )
 
 
@@ -66,11 +48,16 @@ def copy_demo_repo(tmp_path: Path) -> Path:
     return repo
 
 
-def run_demo(repo: Path, *, temp_dir: Path) -> subprocess.CompletedProcess[str]:
+def run_demo(
+    repo: Path,
+    *,
+    temp_dir: Path,
+    python_bin: str | Path = sys.executable,
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(
         {
-            "PYTHON": sys.executable,
+            "PYTHON": str(python_bin),
             "PYTHONDONTWRITEBYTECODE": "1",
             "TMPDIR": str(temp_dir),
             "TEMP": str(temp_dir),
@@ -104,7 +91,7 @@ def full_report_args(*, output: Path | None = None) -> tuple[str, ...]:
         "--digest-policy",
         ".agent-guard/context-digest-policy.yaml",
         "--agent-policy-audit-event",
-        ".agent-guard/evidence/policy-admission-event.json",
+        ".agent-policy/evidence/policy-admission-event.json",
         "--format",
         "json",
     ]
@@ -248,22 +235,23 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "scripts/policy_admit.py" in recipe
     assert "scripts/validate_policy_event.py" in recipe
     assert "python3 scripts/update_digests.py" in recipe
-    assert "python3 -m venv .venv" in recipe
-    assert "python3 scripts/validate_policy_event.py .agent-guard/evidence/policy-admission-event.json" in recipe
-    assert "python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
+    assert "python3.12 -m venv .venv" in recipe
+    assert "after adding or adapting the target repository's tests" in recipe
+    assert "python scripts/validate_policy_event.py .agent-policy/evidence/policy-admission-event.json" in recipe
+    assert "python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
+    assert "python -m agent_guard.consumer --evidence-dir .agent-guard/evidence" in recipe
     assert "recommended-profile conformance" in readme
     assert "--evidence-preset recommended" in readme
     assert "agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json" in readme
     assert "--mcp-policy .agent-guard/mcp-policy.yaml" in readme
-    assert "--agent-policy-audit-event .agent-guard/evidence/policy-admission-event.json" in readme
+    assert "--agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json" in readme
     assert "--repo-alias agent-safety-toolkit-example-public" in readme
-    assert "Without an alias" in readme
-    assert "matching decision repo are emitted" in readme
+    assert "`--repo-alias` is required" in readme
+    assert "never used as an audit-event" in readme
     assert "rejects raw repository identifiers" in readme
     assert "public-safe audit-event schema validation" in readme
-    assert "standalone" in readme
-    assert "`agent-surface-inventory.json` manifest entries" in readme
-    assert "generic `report` role" in readme
+    assert "standalone surface inventory command" in readme
+    assert "embedded in the report" in readme
     assert "fixtures/adversarial/" in readme
     assert "raw scanner" in readme
     assert "JSON from a private repository" in readme
@@ -271,22 +259,24 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "MCP tool-poisoning behavior" in readme
     assert "scripts/policy_event_contract.py" in readme
     assert "one public-safe field grammar" in readme
-    assert "agent-policy` audit-event artifact reference" in recipe
+    assert "sanitized `agent-policy`" in recipe
+    assert "audit-event artifact reference" in recipe
     assert "Do not copy or publish" in recipe
     assert "public audit-event aliases passed as `--repo-alias`" in recipe
     assert "shared action-to-capability contract" in recipe
     assert "action-to-capability map in `scripts/policy_admit.py`" not in recipe
     assert "raw per-scanner JSON from a private repository" in recipe
-    assert "without a public-safe `--repo-alias`" in recipe
-    assert "listed as a generic `report`" in recipe
+    assert "without the required public-safe" in recipe
+    assert "surface inventory v2 embedded in the report" in recipe
     assert "live OAuth validator" in recipe
     assert "generated evidence from a private repository" in recipe
     assert "LLM reviewer" in recipe
     assert "model router" in recipe
     assert "de-personalized" in checklist
     assert "Public evidence handoffs do not include raw per-scanner JSON" in checklist
-    assert "python3 -m pytest -q" in pr_template
-    assert "python3 examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in pr_template
+    assert "python -m pytest -q" in pr_template
+    assert "python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in pr_template
+    assert "python -m agent_guard.consumer --evidence-dir .agent-guard/evidence" in pr_template
     assert "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7" in ci_workflow
     assert "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6" not in ci_workflow
     assert 'python-version: "3.12"' in ci_workflow
@@ -296,6 +286,8 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt" in ci_workflow
     assert "python -m agent_guard.cli surface inventory" in ci_workflow
     assert "git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json" in ci_workflow
+    assert ".agent-guard/evidence/agent-guard-evidence-pack.json" in ci_workflow
+    assert ".agent-policy/evidence/policy-admission-event.json" in ci_workflow
 
 
 def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
@@ -351,83 +343,111 @@ def test_committed_adversarial_fixtures_are_inert_and_isolated() -> None:
     assert "fixtures/adversarial" not in production_text
 
 
-def test_committed_surface_inventory_reports_its_final_size() -> None:
-    inventory_path = ROOT / ".agent-guard" / "evidence" / "agent-surface-inventory.json"
-    payload = json.loads(inventory_path.read_text(encoding="utf-8"))
-    self_entry = next(
-        item
-        for item in payload["surface_inventory"]["surfaces"]
-        if item.get("path") == ".agent-guard/evidence/agent-surface-inventory.json"
+def test_committed_public_bundle_matches_consumer_contract() -> None:
+    assert {path.name for path in EVIDENCE_DIR.iterdir() if path.is_file()} == PUBLIC_BUNDLE_FILENAMES
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agent_guard.consumer",
+            "--evidence-dir",
+            str(EVIDENCE_DIR),
+            str(EVIDENCE_DIR / "agent-guard-report.json"),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
     )
 
-    assert self_entry["size_bytes"] == inventory_path.stat().st_size
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_demo_runner_bootstraps_missing_surface_inventory(tmp_path: Path) -> None:
+def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> None:
     repo = copy_demo_repo(tmp_path)
-    inventory_path = repo / ".agent-guard" / "evidence" / "agent-surface-inventory.json"
-    inventory_path.unlink()
-    stale_stage = inventory_path.with_name(".agent-surface-inventory.json.tmp")
-    stale_stage.write_text("stale stage\n", encoding="utf-8")
+    evidence_dir = repo / ".agent-guard" / "evidence"
+    audit_event = repo / ".agent-policy" / "evidence" / "policy-admission-event.json"
+    (evidence_dir / "agent-guard-report.md").write_text("stale\n", encoding="utf-8")
     result = run_demo(repo, temp_dir=tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    payload = json.loads(inventory_path.read_text(encoding="utf-8"))
-    self_entries = [
-        item
-        for item in payload["surface_inventory"]["surfaces"]
-        if item.get("path") == ".agent-guard/evidence/agent-surface-inventory.json"
-    ]
-    assert self_entries == []
-    assert not stale_stage.exists()
-    assert all(
-        item.get("path") != ".agent-guard/evidence/.agent-surface-inventory.json.tmp"
-        for item in payload["surface_inventory"]["surfaces"]
-    )
-    evidence_dir = inventory_path.parent
-    first_evidence = {
-        path.name: path.read_bytes()
-        for path in sorted(evidence_dir.glob("*.json"))
-    }
+    assert {path.name for path in evidence_dir.iterdir() if path.is_file()} == PUBLIC_BUNDLE_FILENAMES
+    first_evidence = {path.name: path.read_bytes() for path in sorted(evidence_dir.glob("*.json"))}
+    first_event = audit_event.read_bytes()
 
     second_result = run_demo(repo, temp_dir=tmp_path)
 
     assert second_result.returncode == 0, second_result.stdout + second_result.stderr
-    second_evidence = {
-        path.name: path.read_bytes()
-        for path in sorted(evidence_dir.glob("*.json"))
-    }
+    second_evidence = {path.name: path.read_bytes() for path in sorted(evidence_dir.glob("*.json"))}
     assert second_evidence == first_evidence
+    assert audit_event.read_bytes() == first_event
 
 
-def test_demo_runner_accepts_index_backed_surface_inventory_size(tmp_path: Path) -> None:
+def test_demo_runner_restores_previous_evidence_after_failure(tmp_path: Path) -> None:
     repo = copy_demo_repo(tmp_path)
-    inventory_path = repo / ".agent-guard" / "evidence" / "agent-surface-inventory.json"
-    inventory_path.write_text(
-        inventory_path.read_text(encoding="utf-8") + (" " * 1024),
+    evidence_dir = repo / ".agent-guard" / "evidence"
+    audit_event = repo / ".agent-policy" / "evidence" / "policy-admission-event.json"
+    before_bundle = {path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()}
+    before_event = audit_event.read_bytes()
+    (repo / "scripts" / "validate_policy_event.py").write_text(
+        "raise SystemExit(1)\n",
         encoding="utf-8",
     )
-    run_git(repo, "init", "-q")
-    run_git(repo, "add", ".")
-    indexed_size = int(
-        run_git(
-            repo,
-            "cat-file",
-            "-s",
-            ":.agent-guard/evidence/agent-surface-inventory.json",
-        ).stdout
-    )
+
     result = run_demo(repo, temp_dir=tmp_path)
 
-    assert result.returncode == 0, result.stdout + result.stderr
-    payload = json.loads(inventory_path.read_text(encoding="utf-8"))
-    self_entry = next(
-        item
-        for item in payload["surface_inventory"]["surfaces"]
-        if item.get("path") == ".agent-guard/evidence/agent-surface-inventory.json"
+    assert result.returncode != 0
+    after_bundle = {path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()}
+    assert after_bundle == before_bundle
+    assert audit_event.read_bytes() == before_event
+    assert not list(tmp_path.glob(".agent-safety-toolkit-example-evidence.*"))
+
+
+def test_demo_runner_restores_previous_evidence_after_late_failure(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    evidence_dir = repo / ".agent-guard" / "evidence"
+    audit_event = repo / ".agent-policy" / "evidence" / "policy-admission-event.json"
+    before_bundle = {path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()}
+    before_event = audit_event.read_bytes()
+    python_wrapper = tmp_path / "python-wrapper"
+    python_wrapper.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [ "${1:-}" = "-m" ] && [ "${2:-}" = "agent_guard.consumer" ]; then\n'
+        "  exit 1\n"
+        "fi\n"
+        f'exec "{sys.executable}" "$@"\n',
+        encoding="utf-8",
     )
-    assert self_entry["size_bytes"] == indexed_size
-    assert inventory_path.stat().st_size != indexed_size
+    python_wrapper.chmod(0o755)
+
+    result = run_demo(repo, temp_dir=tmp_path, python_bin=python_wrapper)
+
+    assert result.returncode != 0
+    after_bundle = {path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()}
+    assert after_bundle == before_bundle
+    assert audit_event.read_bytes() == before_event
+    assert not list(tmp_path.glob(".agent-safety-toolkit-example-evidence.*"))
+
+
+def test_demo_runner_rejects_symlinked_evidence_directory(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    evidence_dir = repo / ".agent-guard" / "evidence"
+    external_dir = tmp_path / "external-evidence"
+    external_dir.mkdir()
+    sentinel = external_dir / "sentinel.json"
+    sentinel.write_text('{"status":"unchanged"}\n', encoding="utf-8")
+    before = sentinel.read_bytes()
+    shutil.rmtree(evidence_dir)
+    evidence_dir.symlink_to(external_dir, target_is_directory=True)
+
+    result = run_demo(repo, temp_dir=tmp_path)
+
+    assert result.returncode != 0
+    assert evidence_dir.is_symlink()
+    assert sentinel.read_bytes() == before
+    assert str(external_dir) not in result.stdout + result.stderr
+    assert not list(tmp_path.glob(".agent-safety-toolkit-example-evidence.*"))
 
 
 def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
@@ -483,7 +503,7 @@ def test_report_output_file_is_sanitized_and_repo_relative(tmp_path: Path) -> No
     assert payload["mcp_config"]["policy"]["path"] == ".agent-guard/mcp-policy.yaml"
     assert payload["evidence_pack_manifest"]["artifacts"] == [
         {"path": "agent-guard-report.json", "role": "report"},
-        {"path": ".agent-guard/evidence/policy-admission-event.json", "role": "agent-policy-audit-event"},
+        {"path": ".agent-policy/evidence/policy-admission-event.json", "role": "agent-policy-audit-event"},
     ]
     assert payload["context_lock"]["covered_count"] == 1
     serialized = json.dumps(payload, sort_keys=True)
