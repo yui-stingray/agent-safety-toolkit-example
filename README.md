@@ -73,7 +73,7 @@ fallback.
 `scripts/validate_policy_event.py` validates the committed public audit-event
 artifact and rejects raw repository identifiers, local paths, unsupported
 fields, and secret-shaped values before `agent-guard` references it.
-The installed `yui-agent-policy` 0.1.9 distribution also includes an opt-in
+The installed `yui-agent-policy` 0.1.11 distribution also includes an opt-in
 generic `agent-policy.audit_event.v1.1` JSON schema, but this demo intentionally
 keeps its stricter public-artifact profile. The generic schema does not replace
 the demo's raw repo identifier, local path, or secret-shaped value checks.
