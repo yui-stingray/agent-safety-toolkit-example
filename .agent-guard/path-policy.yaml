@@ -10,6 +10,7 @@ scan:
     - "__pycache__"
     - "scripts/__pycache__"
     - "tests/__pycache__"
+    - "examples/__pycache__"
     - "week-logs"
     - "build"
     - "dist"

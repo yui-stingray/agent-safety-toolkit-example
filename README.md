@@ -51,6 +51,9 @@ validator one public-safe field grammar. The wrapper in
 | `publish_release` | `artifact.publish` | `require_approval` | `2` |
 | `force_push` | `push.force` | `deny` | `3` |
 
+Invalid invocations and program errors exit `1`; exit `2` is reserved for a
+validated `require_approval` decision.
+
 Run a single admission check:
 
 ```bash
