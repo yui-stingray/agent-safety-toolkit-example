@@ -86,6 +86,20 @@ file for that platform instead of removing hash checking.
 The checked-in lock targets Python 3.12 on Ubuntu Linux, and `run_demo.sh`
 rejects a different interpreter. Set `PYTHON` explicitly when needed.
 
+## Audit-event Reference Limitation and Migration
+
+In the current `agent-guard` 0.3.4 v1 report and manifest, the audit-event
+artifact reference records only the sanitized path and role. It does not bind or
+verify event content identity, schema/profile semantics, or substitution. The
+demo's own event schema validation is separate and is not a cryptographic or
+content binding.
+
+This v2 migration is dependency-gated. Only after a formally published
+compatible `agent-guard` release should maintainers update the exact hash pin,
+pass the identical event path and a recognized profile to the report/manifest
+producer and packaged consumer, regenerate v2 evidence, and test substitution
+rejection. Until then, retain the current 0.3.4 pin and v1 evidence.
+
 ## Do Not Copy
 
 Do not copy or publish:
