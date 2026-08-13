@@ -315,8 +315,8 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
         in requirements
     )
     assert (
-        "yui-agent-policy==0.1.9 \\\n"
-        "    --hash=sha256:f915f954e33c2d0f731084aa9b725503d65dfd91d35850a77181208469735a78"
+        "yui-agent-policy==0.1.11 \\\n"
+        "    --hash=sha256:5518d3522785242203c1ef22e91cb84db80bd6735dbdff33b20c5cc1ed4cd706"
         in requirements
     )
     assert "generic `agent-policy.audit_event.v1.1` JSON schema" in readme
