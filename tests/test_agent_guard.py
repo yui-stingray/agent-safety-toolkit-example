@@ -393,6 +393,27 @@ def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> N
     assert audit_event.read_bytes() == first_event
 
 
+def test_demo_runner_rejects_decision_with_expected_exit_but_wrong_identity(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    policy_admit = repo / "scripts" / "policy_admit.py"
+    source = policy_admit.read_text(encoding="utf-8")
+    marker = "        emit(payload)\n    return EXIT_BY_MODE[decision.mode]"
+    replacement = (
+        '        if args.action == "read_docs":\n'
+        '            payload["reason"] = "unexpected_reason"\n'
+        "        emit(payload)\n"
+        "    return EXIT_BY_MODE[decision.mode]"
+    )
+    assert marker in source
+    policy_admit.write_text(source.replace(marker, replacement), encoding="utf-8")
+
+    result = run_demo(repo, temp_dir=tmp_path)
+
+    assert result.returncode != 0
+    assert "decision JSON does not match expected identity" in result.stderr
+    assert str(repo) not in result.stdout + result.stderr
+
+
 def test_demo_runner_uses_compatible_python3_before_incompatible_python(tmp_path: Path) -> None:
     repo = copy_demo_repo(tmp_path)
     bin_dir = tmp_path / "bin"
@@ -590,6 +611,60 @@ def test_evidence_consumer_accepts_recommended_report(tmp_path: Path) -> None:
     assert summary["enabled_gate_count"] >= 6
 
 
+@pytest.mark.parametrize(
+    ("case", "artifact_name"),
+    [
+        ("status_inconsistency", "agent-guard-report.json"),
+        ("missing_field", "agent-guard-report.json"),
+        ("extra_field", "agent-guard-report.json"),
+        ("count_mismatch", "agent-guard-report.json"),
+        ("manifest_mismatch", "agent-guard-evidence-pack.json"),
+    ],
+)
+def test_evidence_consumer_matches_packaged_consumer_for_invalid_bundles(
+    tmp_path: Path,
+    case: str,
+    artifact_name: str,
+) -> None:
+    evidence_dir = tmp_path / "evidence"
+    shutil.copytree(EVIDENCE_DIR, evidence_dir)
+    artifact_path = evidence_dir / artifact_name
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+
+    if case == "status_inconsistency":
+        payload["evidence_pack_manifest"]["report"]["status"] = "violation"
+    elif case == "missing_field":
+        payload.pop("report")
+    elif case == "extra_field":
+        payload["report"]["unexpected"] = "unexpected"
+    elif case == "count_mismatch":
+        payload["finding_count"] = 1
+    elif case == "manifest_mismatch":
+        payload["evidence_pack_manifest"]["report"]["finding_count"] = 1
+    else:
+        raise AssertionError(f"unknown mutation case: {case}")
+    artifact_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+    commands = (
+        [sys.executable, str(EVIDENCE_CONSUMER)],
+        [sys.executable, "-m", "agent_guard.consumer"],
+    )
+    results = [
+        subprocess.run(
+            [*command, "--evidence-dir", str(evidence_dir), str(evidence_dir / "agent-guard-report.json")],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        for command in commands
+    ]
+
+    assert results[0].returncode == results[1].returncode == 1
+    assert results[0].stdout == results[1].stdout
+    assert results[0].stderr == results[1].stderr
+
+
 def test_context_inventory_does_not_emit_raw_sensitive_context(tmp_path: Path) -> None:
     policy = tmp_path / "context-policy.yaml"
     policy.write_text("scan:\n  include:\n    - AGENTS.md\n  exclude: []\n", encoding="utf-8")
@@ -655,6 +730,12 @@ def test_path_guard_ignores_pytest_transient_artifacts(tmp_path: Path) -> None:
     script_pycache = script_dir / "__pycache__"
     script_pycache.mkdir()
     (script_pycache / "run_demo.cpython-312.pyc").write_bytes(b"cache")
+    example_dir = tmp_path / "examples"
+    example_dir.mkdir()
+    (example_dir / "evidence_consumer.py").write_text("print('consumer')\n", encoding="utf-8")
+    example_pycache = example_dir / "__pycache__"
+    example_pycache.mkdir()
+    (example_pycache / "evidence_consumer.cpython-312.pyc").write_bytes(b"cache")
     pytest_cache = tmp_path / ".pytest_cache" / "v" / "cache"
     pytest_cache.mkdir(parents=True)
     (pytest_cache / "nodeids").write_text("tests/test_example.py::test_example\n", encoding="utf-8")
@@ -675,7 +756,7 @@ def test_path_guard_ignores_pytest_transient_artifacts(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
-    assert payload["scanned_paths"] == 4
+    assert payload["scanned_paths"] == 6
 
 
 def test_api_guard_ignores_python_cache_artifacts(tmp_path: Path) -> None:

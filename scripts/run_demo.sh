@@ -54,6 +54,7 @@ BACKUP_READY=0
 EVIDENCE_EXISTED=0
 AUDIT_EVENT_EXISTED=0
 PUBLISH_COMPLETE=0
+DECISION_OUTPUT=""
 
 for evidence_path in \
   ".agent-guard" \
@@ -98,6 +99,9 @@ cleanup() {
   if [ -n "$SURFACE_INVENTORY_TMP" ]; then
     rm -f -- "$SURFACE_INVENTORY_TMP"
   fi
+  if [ -n "$DECISION_OUTPUT" ]; then
+    rm -f -- "$DECISION_OUTPUT"
+  fi
   rm -f -- "$AUDIT_EVENT_STAGE" "$EVIDENCE_PACK_STAGE"
   if [ "$BACKUP_READY" -eq 1 ] && [ "$PUBLISH_COMPLETE" -ne 1 ]; then
     rm -rf -- "$EVIDENCE_DIR"
@@ -118,20 +122,48 @@ cleanup() {
 }
 trap cleanup EXIT
 
-expect_exit() {
+expect_decision() {
   expected="$1"
-  shift
+  expected_mode="$2"
+  expected_capability="$3"
+  expected_reason="$4"
+  shift 4
+  DECISION_OUTPUT="$(mktemp "${TMPDIR:-/tmp}/agent-policy-decision.XXXXXX.json")"
   set +e
-  "$@"
+  "$@" > "$DECISION_OUTPUT"
   status="$?"
   set -e
   if [ "$status" -ne "$expected" ]; then
-    echo "expected exit $expected but got $status: $*" >&2
-    exit 1
+    rm -f -- "$DECISION_OUTPUT"
+    DECISION_OUTPUT=""
+    echo "unexpected policy decision exit status" >&2
+    return 1
   fi
+  if ! "$PYTHON_BIN" - "$DECISION_OUTPUT" "$expected_mode" "$expected_capability" "$expected_reason" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+try:
+    payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    expected = dict(zip(("mode", "capability", "reason"), sys.argv[2:]))
+    if not isinstance(payload, dict) or any(payload.get(field) != value for field, value in expected.items()):
+        raise ValueError
+except (OSError, TypeError, ValueError):
+    raise SystemExit(1)
+PY
+  then
+    rm -f -- "$DECISION_OUTPUT"
+    DECISION_OUTPUT=""
+    echo "decision JSON does not match expected identity" >&2
+    return 1
+  fi
+  rm -f -- "$DECISION_OUTPUT"
+  DECISION_OUTPUT=""
 }
 
-"$PYTHON_BIN" scripts/policy_admit.py \
+expect_decision 0 auto_allow read repo_policy \
+  "$PYTHON_BIN" scripts/policy_admit.py \
   --action read_docs \
   --repo yui-stingray/agent-safety-toolkit-example \
   --ownership-class internal
@@ -163,22 +195,26 @@ SURFACE_INVENTORY_TMP="$(mktemp "${TMPDIR:-/tmp}/agent-surface-inventory.XXXXXX.
 "$PYTHON_BIN" scripts/validate_policy_event.py "$AUDIT_EVENT_STAGE"
 mv -- "$AUDIT_EVENT_STAGE" "$AUDIT_EVENT_PATH"
 
-expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
+expect_decision 2 require_approval write repo_policy \
+  "$PYTHON_BIN" scripts/policy_admit.py \
   --action edit_docs \
   --repo yui-stingray/agent-safety-toolkit-example \
   --ownership-class internal
 
-expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
+expect_decision 2 require_approval artifact.publish repo_policy \
+  "$PYTHON_BIN" scripts/policy_admit.py \
   --action publish_release \
   --repo yui-stingray/agent-safety-toolkit-example \
   --ownership-class internal
 
-expect_exit 3 "$PYTHON_BIN" scripts/policy_admit.py \
+expect_decision 3 deny push.force hard_guardrail \
+  "$PYTHON_BIN" scripts/policy_admit.py \
   --action force_push \
   --repo yui-stingray/agent-safety-toolkit-example \
   --ownership-class internal
 
-expect_exit 2 "$PYTHON_BIN" scripts/policy_admit.py \
+expect_decision 2 require_approval write hard_guardrail \
+  "$PYTHON_BIN" scripts/policy_admit.py \
   --action edit_docs \
   --repo external/example \
   --ownership-class external \

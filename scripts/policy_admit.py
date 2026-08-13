@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Final
+from typing import Final, NoReturn
 
 from agent_policy import PolicyDecision, audit_event_to_json, build_audit_event, evaluate, load_policy_file
 
@@ -36,8 +36,13 @@ EXIT_BY_MODE: Final[dict[str, int]] = {
 }
 
 
+class PublicArgumentParser(argparse.ArgumentParser):
+    def error(self, _message: str) -> NoReturn:
+        self.exit(1, "policy-admit invocation is invalid\n")
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="evaluate a normalized demo action")
+    parser = PublicArgumentParser(description="evaluate a normalized demo action")
     parser.add_argument("--policy", default=DEFAULT_POLICY, help="path to agent-policy TOML")
     parser.add_argument("--repo", default=DEFAULT_REPO, help="repository identifier")
     parser.add_argument(

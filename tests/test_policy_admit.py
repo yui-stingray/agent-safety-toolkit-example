@@ -43,6 +43,22 @@ def write_json(path: Path, payload: dict[str, object]) -> Path:
     return path
 
 
+def test_malformed_invocation_returns_exit_one_without_echoing_input() -> None:
+    marker = "untrusted-action-marker"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--action", marker],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "policy-admit invocation is invalid\n"
+    assert marker not in result.stdout + result.stderr
+
+
 def test_read_docs_is_auto_allowed() -> None:
     code, payload = run_admit(
         "--action",
