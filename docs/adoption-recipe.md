@@ -29,6 +29,7 @@ Start with these files:
 - `examples/evidence_consumer.py`
 - `scripts/policy_event_contract.py`
 - `scripts/policy_admit.py`
+- `scripts/run_agent_guard_bounded.sh`
 - `scripts/validate_policy_event.py`
 - `scripts/run_demo.sh`
 - `scripts/update_digests.py`
@@ -62,7 +63,7 @@ Regenerate digest pins after every intentional change to pinned files:
 ```bash
 python3 scripts/update_digests.py
 agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml
-agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
+bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
 ```
 
 ## First Verification Pass
@@ -83,8 +84,21 @@ python -m agent_guard.consumer --evidence-dir .agent-guard/evidence .agent-guard
 
 If dependency hashes do not match on the target platform, regenerate the lock
 file for that platform instead of removing hash checking.
-The checked-in lock targets Python 3.12 on Ubuntu Linux, and `run_demo.sh`
-rejects a different interpreter. Set `PYTHON` explicitly when needed.
+The checked-in lock targets CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64,
+and `run_demo.sh` rejects a different interpreter. Set `PYTHON` explicitly when
+needed. Generate a separate hash lock and CI job before claiming another
+platform. The demo also requires GNU `timeout` and supervises the published
+`agent-guard` 0.3.4 context check, context inventory, surface inventory, context
+lock, and report for 12 seconds.
+This mitigates the published version's unbounded custom context-regex execution;
+it is not a fixed `agent-guard` release, so review context-policy changes before
+execution.
+
+The runner restores its snapshot after ordinary catchable failures, but
+publication across `.agent-guard` and `.agent-policy` is not an atomic
+transaction. `SIGKILL`, host power loss, and concurrent readers are outside the
+guarantee. Run it in an isolated checkout with one writer and consume or publish
+the evidence set only after a successful exit.
 
 ## Audit-event Reference Limitation and Migration
 

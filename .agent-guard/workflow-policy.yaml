@@ -29,7 +29,7 @@ workflow_checks:
       - id: test_suite
         command: python -m pytest -q
       - id: surface_inventory_workflow
-        command: python -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2
+        command: bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2
       - id: demo_script
         command: bash scripts/run_demo.sh
       - id: evidence_freshness

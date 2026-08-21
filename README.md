@@ -80,7 +80,9 @@ the demo's raw repo identifier, local path, or secret-shaped value checks.
 
 ## Local Verification
 
-This demo pins dependencies with hashes for Python 3.12 on Ubuntu Linux, which is also the CI target.
+This demo's checked-in lock targets CPython 3.12 on GitHub-hosted Ubuntu Linux
+x86_64, which is also the CI target. Generate a separate hash lock and CI job
+before claiming support for another platform.
 
 ```bash
 python3.12 -m venv .venv
@@ -92,7 +94,12 @@ bash scripts/run_demo.sh
 
 `scripts/run_demo.sh` rejects non-3.12 interpreters. Set `PYTHON` to an
 explicit Python 3.12 executable when the activated environment is not first on
-`PATH`.
+`PATH`. It also requires GNU `timeout`. The script runs the published
+`agent-guard` 0.3.4 context check, context inventory, surface inventory, context
+lock, and report behind a 12-second external supervisor. This limits a known CPU-exhaustion risk from an
+unreviewed custom context-policy regular expression; timeout output is discarded
+and the demo fails closed. Review repository policy changes before running the
+demo. This wrapper is a mitigation, not a fixed `agent-guard` release.
 
 The end-to-end script runs:
 
@@ -116,13 +123,22 @@ The static guard portion is intentionally deterministic and can be inspected as
 these core commands:
 
 ```bash
+agent-guard() {
+  PYTHON="$(command -v python)" bash scripts/run_agent_guard_bounded.sh \
+    python -m agent_guard.cli "$@"
+}
 agent-guard context check --root . --policy .agent-guard/context-policy.yaml --json
 agent-guard surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json
 agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json
 agent-guard workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
 agent-guard drift check --root . --profile recommended --schema-version v2 --json
 agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
+unset -f agent-guard
 ```
+
+The temporary `agent-guard` shell function above routes every displayed command
+through the bounded wrapper; it does not invoke the installed executable
+directly.
 
 Treat the individual per-scanner `--json` outputs above as local inspection or
 CI-internal diagnostics. The public handoff is the sanitized report and
@@ -149,9 +165,13 @@ The fixed public `agent-guard` bundle under `.agent-guard/evidence/` contains:
 
 The runner snapshots the previous complete evidence set, generates and
 validates its replacement with the installed `agent-guard` consumer, and
-restores the snapshot on failure instead of leaving mixed files.
+restores the snapshot after ordinary catchable failures.
 It refuses to replace a bundle directory containing unexpected entries, so
 unrelated local evidence is not deleted implicitly.
+Publication spans `.agent-guard` and `.agent-policy` and is not an atomic
+multi-file transaction. `SIGKILL`, host power loss, and concurrent readers are
+outside this guarantee; run the demo in an isolated checkout with one writer,
+and publish or consume the resulting set only after the command succeeds.
 The standalone surface inventory command remains a local/CI check; this demo
 uses the identical section embedded in the report as the public handoff.
 The manifest intentionally references the separately stored, sanitized runtime
@@ -178,6 +198,7 @@ The digest policy pins files that define the public demo contract:
 
 - `AGENTS.md`
 - `README.md`
+- `scripts/run_agent_guard_bounded.sh`
 - `scripts/policy_event_contract.py`
 - `scripts/policy_admit.py`
 - `scripts/validate_policy_event.py`
@@ -190,8 +211,8 @@ After an intentional change to one of those files:
 ```bash
 python3 scripts/update_digests.py
 agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml
-agent-guard context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
+bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
+bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --format json --output .agent-guard/evidence/agent-guard-report.json
 ```
 
 ## Public Safety Scope
