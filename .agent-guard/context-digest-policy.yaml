@@ -5,7 +5,10 @@ checks:
     sha256: 1836da432c9a190aa0d086ec8e45fe7733fdaf0ba592d5f2949849a81346e863
   - id: readme
     path: README.md
-    sha256: caa1a1bce5bf74addc14bed668ed8164e48527a625cfcfbcb71b0ecdee76758b
+    sha256: df79b96c87549c23bddb48e7df0d36bfe81ee415e1344845a406b793c30fa722
+  - id: bounded_guard_runner
+    path: scripts/run_agent_guard_bounded.sh
+    sha256: fd72a93904082523fdfe8e302fde12f7549390a5a94ef7f75245b489a4ec5ca3
   - id: policy_event_contract
     path: scripts/policy_event_contract.py
     sha256: 830d3137d8c18fdd486a4e77cad7fd8fd0cc14e57c8bac7136a881334856f74a
@@ -23,4 +26,4 @@ checks:
     sha256: 41c974ecafe4f2c0dfe9f5b010047dbeba51c503875ac5f2ec0b1e3c156952d7
   - id: workflow_policy
     path: .agent-guard/workflow-policy.yaml
-    sha256: 58dfdfe621abb14870a75a6086c56cd099017f5a6d827eeeab4fff11ac3aa0d5
+    sha256: 6d3ff70124094a066900192d37e4c65fd561ec74612e547d77d5de0801150612

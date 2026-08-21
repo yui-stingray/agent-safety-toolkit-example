@@ -18,6 +18,7 @@ PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 EVIDENCE_CONSUMER = ROOT / "examples" / "evidence_consumer.py"
 RUN_DEMO = ROOT / "scripts" / "run_demo.sh"
+BOUNDED_GUARD = ROOT / "scripts" / "run_agent_guard_bounded.sh"
 ADVERSARIAL_FIXTURES = ROOT / "fixtures" / "adversarial"
 EVIDENCE_DIR = ROOT / ".agent-guard" / "evidence"
 AUDIT_EVENT = ROOT / ".agent-policy" / "evidence" / "policy-admission-event.json"
@@ -28,12 +29,23 @@ PUBLIC_BUNDLE_FILENAMES = {
 
 
 def run_guard(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["PYTHON"] = sys.executable
     return subprocess.run(
-        [sys.executable, "-m", "agent_guard.cli", *args],
+        [
+            "bash",
+            str(BOUNDED_GUARD),
+            "python",
+            "-m",
+            "agent_guard.cli",
+            *args,
+        ],
         cwd=cwd,
+        env=env,
         text=True,
         capture_output=True,
         check=False,
+        timeout=30,
     )
 
 
@@ -290,7 +302,10 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "python -m venv /tmp/agent-safety-download-check" in ci_workflow
     assert "pip download --index-url https://pypi.org/simple --no-deps --require-hashes" in ci_workflow
     assert "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt" in ci_workflow
-    assert "python -m agent_guard.cli surface inventory" in ci_workflow
+    assert (
+        "bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli surface inventory"
+        in ci_workflow
+    )
     assert "git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json" in ci_workflow
     assert ".agent-guard/evidence/agent-guard-evidence-pack.json" in ci_workflow
     assert ".agent-policy/evidence/policy-admission-event.json" in ci_workflow
@@ -308,6 +323,11 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "path: scripts/policy_event_contract.py" in digest_policy
     assert "- `scripts/policy_event_contract.py`" in readme
     assert "- `scripts/policy_event_contract.py`" in recipe
+    assert '("bounded_guard_runner", "scripts/run_agent_guard_bounded.sh")' in update_script
+    assert "id: bounded_guard_runner" in digest_policy
+    assert "path: scripts/run_agent_guard_bounded.sh" in digest_policy
+    assert "- `scripts/run_agent_guard_bounded.sh`" in readme
+    assert "- `scripts/run_agent_guard_bounded.sh`" in recipe
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
         "yui-agent-guard==0.3.4 \\\n"
@@ -319,10 +339,55 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
         "    --hash=sha256:5518d3522785242203c1ef22e91cb84db80bd6735dbdff33b20c5cc1ed4cd706"
         in requirements
     )
+    assert requirements.startswith(
+        "# Locked for CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64.\n"
+    )
+    assert (
+        "pytest==9.1.1 \\\n"
+        "    --hash=sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c"
+        in requirements
+    )
     assert "generic `agent-policy.audit_event.v1.1` JSON schema" in readme
     assert "stricter public-artifact profile" in readme
     assert "does not replace" in readme
     assert "raw repo identifier, local path, or secret-shaped value checks" in readme
+
+
+def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    recipe = ADOPTION_RECIPE.read_text(encoding="utf-8")
+    runner = RUN_DEMO.read_text(encoding="utf-8")
+    bounded_runner = BOUNDED_GUARD.read_text(encoding="utf-8")
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+
+    for document in (readme, recipe):
+        normalized = " ".join(document.split())
+        assert "CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64" in normalized
+        assert "GNU `timeout`" in normalized
+        assert "12-second external supervisor" in normalized or "for 12 seconds" in normalized
+        assert "not a fixed `agent-guard` release" in normalized
+        assert "not an atomic" in normalized
+        assert "`SIGKILL`, host power loss, and concurrent readers" in normalized
+        assert "isolated checkout" in normalized
+
+    assert "PYTHON=\"$PYTHON_BIN\" bash scripts/run_agent_guard_bounded.sh \\\n" in runner
+    assert 'python -m agent_guard.cli "$@"' in runner
+    assert runner.count("run_bounded_context_guard") == 6
+    assert "timeout --signal=KILL 12s" in bounded_runner
+    assert '} 2>>"$stderr_path"' in bounded_runner
+    assert "context evaluation exceeded the external execution budget" in bounded_runner
+    assert "agent-guard() {" in readme
+    assert 'python -m agent_guard.cli "$@"' in readme
+    assert "unset -f agent-guard" in readme
+    assert "does not invoke the installed executable\ndirectly" in readme
+    assert 'assert sys.implementation.name == "cpython"' in workflow
+    assert 'assert sys.version_info[:2] == (3, 12)' in workflow
+    assert 'assert platform.system() == "Linux"' in workflow
+    assert 'assert platform.machine() == "x86_64"' in workflow
+    assert (
+        "bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli surface inventory"
+        in workflow
+    )
 
 
 def test_v1_audit_event_reference_limit_and_v2_migration_are_documented() -> None:
@@ -540,6 +605,104 @@ def test_demo_runner_restores_previous_evidence_after_late_failure(tmp_path: Pat
     assert after_bundle == before_bundle
     assert audit_event.read_bytes() == before_event
     assert not list(tmp_path.glob(".agent-safety-toolkit-example-evidence.*"))
+
+
+def test_demo_runner_bounds_unreviewed_context_regex_without_leaking_it(
+    tmp_path: Path,
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    evidence_dir = repo / ".agent-guard" / "evidence"
+    audit_event = repo / ".agent-policy" / "evidence" / "policy-admission-event.json"
+    before_bundle = {path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()}
+    before_event = audit_event.read_bytes()
+    pattern = "(a+)+$"
+    context_line = ("a" * 30) + "!"
+    (repo / ".agent-guard" / "context-policy.yaml").write_text(
+        "scan:\n"
+        "  include:\n"
+        "    - AGENTS.md\n"
+        "  exclude: []\n"
+        "policy:\n"
+        "  extra_forbidden_patterns:\n"
+        "    - id: bounded-synthetic-pattern\n"
+        "      severity: medium\n"
+        f"      pattern: '{pattern}'\n"
+        "      message: bounded synthetic test\n",
+        encoding="utf-8",
+    )
+    (repo / "AGENTS.md").write_text(context_line + "\n", encoding="utf-8")
+
+    result = run_demo(repo, temp_dir=tmp_path)
+
+    assert result.returncode != 0
+    assert result.stderr == (
+        "agent-guard context evaluation exceeded the external execution budget\n"
+    )
+    assert pattern not in result.stdout + result.stderr
+    assert context_line not in result.stdout + result.stderr
+    after_bundle = {path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()}
+    assert after_bundle == before_bundle
+    assert audit_event.read_bytes() == before_event
+
+
+def test_bounded_guard_sanitizes_invalid_python_path(tmp_path: Path) -> None:
+    invalid_python = tmp_path / "private-python-path"
+    env = os.environ.copy()
+    env["PYTHON"] = str(invalid_python)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(BOUNDED_GUARD),
+            "python",
+            "-m",
+            "agent_guard.cli",
+            "context",
+            "check",
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == (
+        "Python 3.12 is required; set PYTHON to a Python 3.12 executable.\n"
+    )
+    assert str(invalid_python) not in result.stderr
+
+
+def test_bounded_guard_sanitizes_invalid_temp_directory(tmp_path: Path) -> None:
+    invalid_temp = tmp_path / "private-temp-path"
+    env = os.environ.copy()
+    env.update({"PYTHON": sys.executable, "TMPDIR": str(invalid_temp)})
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(BOUNDED_GUARD),
+            "python",
+            "-m",
+            "agent_guard.cli",
+            "context",
+            "check",
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "agent-guard bounded context execution failed\n"
+    assert str(invalid_temp) not in result.stderr
 
 
 def test_demo_runner_rejects_symlinked_evidence_directory(tmp_path: Path) -> None:

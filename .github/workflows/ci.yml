@@ -23,6 +23,18 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Verify lock target platform
+        run: |
+          python - <<'PY'
+          import platform
+          import sys
+
+          assert sys.implementation.name == "cpython"
+          assert sys.version_info[:2] == (3, 12)
+          assert platform.system() == "Linux"
+          assert platform.machine() == "x86_64"
+          PY
+
       # actions/setup-python exposes the selected 3.12 runtime as `python`.
       # The current locked agent-guard release recognizes this form in workflow evidence.
       - name: Verify locked dependencies resolve from public PyPI
@@ -37,7 +49,7 @@ jobs:
         run: python -m pytest -q
 
       - name: Check guard workflow wiring
-        run: python -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json > /tmp/agent-surface-inventory.json
+        run: bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json > /tmp/agent-surface-inventory.json
 
       - name: Run end-to-end demo
         run: bash scripts/run_demo.sh

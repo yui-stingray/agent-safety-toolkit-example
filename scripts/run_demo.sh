@@ -26,6 +26,11 @@ if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] ==
   exit 1
 fi
 
+if ! command -v timeout >/dev/null 2>&1; then
+  echo "A timeout supervisor is required for the published agent-guard 0.3.4 context checks." >&2
+  exit 1
+fi
+
 CONTENT_TARGETS=(
   AGENTS.md
   README.md
@@ -162,6 +167,11 @@ PY
   DECISION_OUTPUT=""
 }
 
+run_bounded_context_guard() {
+  PYTHON="$PYTHON_BIN" bash scripts/run_agent_guard_bounded.sh \
+    python -m agent_guard.cli "$@"
+}
+
 expect_decision 0 auto_allow read repo_policy \
   "$PYTHON_BIN" scripts/policy_admit.py \
   --action read_docs \
@@ -221,15 +231,15 @@ expect_decision 2 require_approval write hard_guardrail \
   --first-write
 
 "$PYTHON_BIN" -m agent_guard.cli path check --root . --policy .agent-guard/path-policy.yaml --json
-"$PYTHON_BIN" -m agent_guard.cli context check --root . --policy .agent-guard/context-policy.yaml --json
-"$PYTHON_BIN" -m agent_guard.cli context inventory --root . --policy .agent-guard/context-policy.yaml --json
-"$PYTHON_BIN" -m agent_guard.cli surface inventory \
+run_bounded_context_guard context check --root . --policy .agent-guard/context-policy.yaml --json
+run_bounded_context_guard context inventory --root . --policy .agent-guard/context-policy.yaml --json
+run_bounded_context_guard surface inventory \
   --root . \
   --context-policy .agent-guard/context-policy.yaml \
   --schema-version v2 \
   --json \
   > "$SURFACE_INVENTORY_TMP"
-"$PYTHON_BIN" -m agent_guard.cli context lock \
+run_bounded_context_guard context lock \
   --root . \
   --policy .agent-guard/context-policy.yaml \
   --check \
@@ -246,7 +256,7 @@ expect_decision 2 require_approval write hard_guardrail \
 "$PYTHON_BIN" -m agent_guard.cli digest check --root . --policy .agent-guard/context-digest-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli drift check --root . --profile recommended --schema-version v2 --json
-"$PYTHON_BIN" -m agent_guard.cli report \
+run_bounded_context_guard report \
   --root . \
   --context-policy .agent-guard/context-policy.yaml \
   --evidence-preset recommended \
