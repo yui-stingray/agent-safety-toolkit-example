@@ -3,12 +3,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import signal
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
+
+from scripts import evidence_publication
 
 ROOT = Path(__file__).resolve().parents[1]
 ADOPTION_RECIPE = ROOT / "docs" / "adoption-recipe.md"
@@ -69,6 +73,28 @@ def run_demo(
     python_bin: str | Path | None = sys.executable,
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    env = demo_environment(
+        temp_dir=temp_dir,
+        python_bin=python_bin,
+        extra_env=extra_env,
+    )
+    return subprocess.run(
+        ["bash", "scripts/run_demo.sh"],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+
+
+def demo_environment(
+    *,
+    temp_dir: Path,
+    python_bin: str | Path | None = sys.executable,
+    extra_env: dict[str, str] | None = None,
+) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
         {
@@ -84,14 +110,77 @@ def run_demo(
         env["PYTHON"] = str(python_bin)
     if extra_env is not None:
         env.update(extra_env)
-    return subprocess.run(
+    return env
+
+
+def start_demo(
+    repo: Path,
+    *,
+    temp_dir: Path,
+    extra_env: dict[str, str],
+) -> subprocess.Popen[str]:
+    return subprocess.Popen(
         ["bash", "scripts/run_demo.sh"],
         cwd=repo,
-        env=env,
+        env=demo_environment(temp_dir=temp_dir, extra_env=extra_env),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def wait_for_marker(marker: Path, process: subprocess.Popen[str]) -> None:
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        if marker.is_file():
+            return
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            pytest.fail(f"demo exited before test marker: {stdout}{stderr}")
+        time.sleep(0.01)
+    process.kill()
+    stdout, stderr = process.communicate()
+    pytest.fail(f"demo did not reach test marker: {stdout}{stderr}")
+
+
+def public_artifact_bytes(repo: Path) -> dict[str, bytes]:
+    return {
+        relative.as_posix(): (repo / relative).read_bytes()
+        for _role, relative in evidence_publication.ARTIFACTS
+    }
+
+
+def public_artifact_modes(repo: Path) -> dict[str, int]:
+    return {
+        relative.as_posix(): (repo / relative).stat().st_mode & 0o777
+        for _role, relative in evidence_publication.ARTIFACTS
+    }
+
+
+def run_snapshot_consumer(
+    repo: Path,
+    *,
+    temp_dir: Path,
+    consumer: str = "example",
+    extra_env: dict[str, str] | None = None,
+    timeout: int = 120,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            "scripts/evidence_publication.py",
+            "consume",
+            "--repo",
+            ".",
+            "--consumer",
+            consumer,
+        ],
+        cwd=repo,
+        env=demo_environment(temp_dir=temp_dir, extra_env=extra_env),
         text=True,
         capture_output=True,
         check=False,
-        timeout=120,
+        timeout=timeout,
     )
 
 
@@ -293,19 +382,38 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "examples/evidence_consumer.py" in recipe
     assert "scripts/policy_event_contract.py" in recipe
     assert "scripts/policy_admit.py" in recipe
+    assert "scripts/evidence_publication.py" in recipe
     assert "scripts/validate_policy_event.py" in recipe
     assert "python3 scripts/update_digests.py" in recipe
     assert "python3.12 -m venv .venv" in recipe
     assert "after adding or adapting the target repository's tests" in recipe
-    assert "python scripts/validate_policy_event.py .agent-policy/evidence/policy-admission-event.json" in recipe
-    assert "python examples/evidence_consumer.py --agent-policy-audit-event" in recipe
-    assert "python -m agent_guard.consumer --evidence-dir .agent-guard/evidence" in recipe
+    assert (
+        "python scripts/validate_policy_event.py .agent-policy/evidence/policy-admission-event.json"
+        in recipe
+    )
+    assert (
+        "python scripts/evidence_publication.py consume --repo . --consumer example"
+        in recipe
+    )
+    assert (
+        "python scripts/evidence_publication.py consume --repo . --consumer packaged"
+        in recipe
+    )
     assert "recommended-profile conformance" in readme
     assert "--evidence-preset recommended" in readme
-    assert "agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json" in readme
+    assert (
+        "agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json"
+        in readme
+    )
     assert "--mcp-policy .agent-guard/mcp-policy.yaml" in readme
-    assert "--agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json" in readme
-    assert "--agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1" in readme
+    assert (
+        "--agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json"
+        in readme
+    )
+    assert (
+        "--agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1"
+        in readme
+    )
     assert "--repo-alias agent-safety-toolkit-example-public" in readme
     assert "`--repo-alias` is required" in readme
     assert "never used as an audit-event" in readme
@@ -338,21 +446,43 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "Public evidence handoffs do not include raw per-scanner JSON" in checklist
     assert "v2 content binding" in checklist
     assert "python -m pytest -q" in pr_template
-    assert "python examples/evidence_consumer.py --agent-policy-audit-event" in pr_template
-    assert "python -m agent_guard.consumer --evidence-dir .agent-guard/evidence --agent-policy-audit-event" in pr_template
-    assert "agent-guard.public_agent_policy_audit_event.v1" in pr_template
-    assert "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7" in ci_workflow
-    assert "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6" not in ci_workflow
+    assert (
+        "python scripts/evidence_publication.py consume --repo . --consumer example"
+        in pr_template
+    )
+    assert (
+        "python scripts/evidence_publication.py consume --repo . --consumer packaged"
+        in pr_template
+    )
+    assert (
+        "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7" in ci_workflow
+    )
+    assert (
+        "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6"
+        not in ci_workflow
+    )
     assert 'python-version: "3.12"' in ci_workflow
-    assert "actions/setup-python exposes the selected 3.12 runtime as `python`" in ci_workflow
+    assert (
+        "actions/setup-python exposes the selected 3.12 runtime as `python`"
+        in ci_workflow
+    )
     assert "python -m venv /tmp/agent-safety-download-check" in ci_workflow
-    assert "pip download --index-url https://pypi.org/simple --no-deps --require-hashes" in ci_workflow
-    assert "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt" in ci_workflow
+    assert (
+        "pip download --index-url https://pypi.org/simple --no-deps --require-hashes"
+        in ci_workflow
+    )
+    assert (
+        "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt"
+        in ci_workflow
+    )
     assert (
         "bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli surface inventory"
         in ci_workflow
     )
-    assert "git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json" in ci_workflow
+    assert (
+        "git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json"
+        in ci_workflow
+    )
     assert ".agent-guard/evidence/agent-guard-evidence-pack.json" in ci_workflow
     assert ".agent-policy/evidence/policy-admission-event.json" in ci_workflow
 
@@ -363,6 +493,7 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     digest_policy = CONTEXT_DIGEST_POLICY.read_text(encoding="utf-8")
     update_script = (ROOT / "scripts" / "update_digests.py").read_text(encoding="utf-8")
     requirements = (ROOT / "requirements" / "agent-safety-tools.txt").read_text(encoding="utf-8")
+    contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
 
     assert '("policy_event_contract", "scripts/policy_event_contract.py")' in update_script
     assert "id: policy_event_contract" in digest_policy
@@ -374,6 +505,18 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "path: scripts/run_agent_guard_bounded.sh" in digest_policy
     assert "- `scripts/run_agent_guard_bounded.sh`" in readme
     assert "- `scripts/run_agent_guard_bounded.sh`" in recipe
+    assert '("demo_runner", "scripts/run_demo.sh")' in update_script
+    assert "id: demo_runner" in digest_policy
+    assert "path: scripts/run_demo.sh" in digest_policy
+    assert '("evidence_publisher", "scripts/evidence_publication.py")' in update_script
+    assert "id: evidence_publisher" in digest_policy
+    assert "path: scripts/evidence_publication.py" in digest_policy
+    assert "- `scripts/evidence_publication.py`" in readme
+    assert "- `scripts/evidence_publication.py`" in recipe
+    assert "canonical `PINNED_FILES` list" in contributing
+    assert "MCP policy" in contributing
+    assert "workflow policy" in contributing
+    assert "--output .agent-guard/evidence/agent-guard-report.json" not in readme
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
         "yui-agent-guard==0.3.5 \\\n"
@@ -415,11 +558,18 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
         assert "0.3.5 independently bounds context scans" in normalized
         assert "defense in depth" in normalized
         assert "not a fixed `agent-guard` release" not in normalized
-        assert "not an atomic" in normalized
-        assert "`SIGKILL`, host power loss, and concurrent readers" in normalized
-        assert "isolated checkout" in normalized
+        assert "durable rollback journal" in normalized
+        assert "snapshot consumer" in normalized
+        assert (
+            "not one portable atomic filesystem object" in normalized
+            or "cannot be replaced in one portable filesystem operation" in normalized
+        )
+        assert "Direct readers" in normalized or "uncoordinated process" in normalized
+        assert "NFS, Windows, macOS, container volumes" in normalized
+        assert "Git submodules" in normalized
+        assert "same-user" in normalized
 
-    assert "PYTHON=\"$PYTHON_BIN\" bash scripts/run_agent_guard_bounded.sh \\\n" in runner
+    assert 'PYTHON="$PYTHON_BIN" bash scripts/run_agent_guard_bounded.sh \\\n' in runner
     assert 'python -m agent_guard.cli "$@"' in runner
     assert runner.count("run_bounded_context_guard") == 6
     assert "timeout --signal=KILL 12s" in bounded_runner
@@ -430,7 +580,7 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
     assert "unset -f agent-guard" in readme
     assert "does not invoke the installed executable\ndirectly" in readme
     assert 'assert sys.implementation.name == "cpython"' in workflow
-    assert 'assert sys.version_info[:2] == (3, 12)' in workflow
+    assert "assert sys.version_info[:2] == (3, 12)" in workflow
     assert 'assert platform.system() == "Linux"' in workflow
     assert 'assert platform.machine() == "x86_64"' in workflow
     assert (
@@ -514,6 +664,543 @@ def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> N
     second_evidence = {path.name: path.read_bytes() for path in sorted(evidence_dir.glob("*.json"))}
     assert second_evidence == first_evidence
     assert audit_event.read_bytes() == first_event
+
+
+def test_stage_snapshot_includes_dirty_and_nonignored_untracked_files(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "source"
+    repo.mkdir()
+    tracked = repo / "tracked.txt"
+    tracked.write_text("committed\n", encoding="utf-8")
+    (repo / ".gitignore").write_text(".env\n", encoding="utf-8")
+    subprocess.run(["git", "init", "--quiet"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.name", "Evidence Test"], cwd=repo, check=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "evidence-test@example.invalid"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "add", "tracked.txt", ".gitignore"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "--quiet", "-m", "baseline"], cwd=repo, check=True)
+    tracked.write_text("working tree\n", encoding="utf-8")
+    (repo / "untracked.txt").write_text("nonignored\n", encoding="utf-8")
+    (repo / ".env").write_text("excluded-local-value\n", encoding="utf-8")
+
+    state = evidence_publication._ensure_state_directory(repo)
+    container, stage, _nonce = evidence_publication._prepare_stage(repo, state)
+    try:
+        assert (stage / "tracked.txt").read_text(encoding="utf-8") == "working tree\n"
+        assert (stage / "untracked.txt").read_text(encoding="utf-8") == "nonignored\n"
+        assert not (stage / ".env").exists()
+    finally:
+        evidence_publication._remove_stage(repo, container)
+
+
+def test_stage_cleanup_does_not_prune_an_unrelated_worktree(tmp_path: Path) -> None:
+    repo = tmp_path / "source"
+    repo.mkdir()
+    (repo / "tracked.txt").write_text("baseline\n", encoding="utf-8")
+    subprocess.run(["git", "init", "--quiet"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Evidence Test"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "evidence-test@example.invalid"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "--quiet", "-m", "baseline"], cwd=repo, check=True)
+    unrelated = tmp_path / "unrelated-worktree"
+    subprocess.run(
+        ["git", "worktree", "add", "--quiet", "--detach", str(unrelated), "HEAD"],
+        cwd=repo,
+        check=True,
+    )
+
+    state = evidence_publication._ensure_state_directory(repo)
+    container, _stage, _nonce = evidence_publication._prepare_stage(repo, state)
+    evidence_publication._remove_stage(repo, container)
+
+    listed = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert str(unrelated) in listed
+
+
+def test_stage_snapshot_rejects_git_submodules(tmp_path: Path) -> None:
+    repo = tmp_path / "source"
+    repo.mkdir()
+    (repo / "tracked.txt").write_text("baseline\n", encoding="utf-8")
+    subprocess.run(["git", "init", "--quiet"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Evidence Test"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "evidence-test@example.invalid"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "--quiet", "-m", "baseline"], cwd=repo, check=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "update-index", "--add", "--cacheinfo", f"160000,{head},vendor/child"],
+        cwd=repo,
+        check=True,
+    )
+
+    state = evidence_publication._ensure_state_directory(repo)
+    with pytest.raises(
+        evidence_publication.PublicationError,
+        match="working-tree staging does not support Git submodules",
+    ):
+        evidence_publication._prepare_stage(repo, state)
+    assert not list(state.glob("stage-*"))
+
+
+def test_no_git_stage_matches_public_evidence_ignore_contract(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    guard_evidence = repo / ".agent-guard" / "evidence"
+    policy_evidence = repo / ".agent-policy" / "evidence"
+    (guard_evidence / "local.json").write_text("local-only\n", encoding="utf-8")
+    (policy_evidence / "debug.json").write_text("local-only\n", encoding="utf-8")
+    (repo / ".ruff_cache").mkdir(exist_ok=True)
+    (repo / ".ruff_cache" / "cache").write_text("local-only\n", encoding="utf-8")
+
+    state = evidence_publication._ensure_state_directory(repo)
+    container, stage, _nonce = evidence_publication._prepare_stage(repo, state)
+    try:
+        assert {path.name for path in (stage / ".agent-guard/evidence").iterdir()} == {
+            "agent-guard-report.json",
+            "agent-guard-evidence-pack.json",
+        }
+        assert {
+            path.name for path in (stage / ".agent-policy/evidence").iterdir()
+        } == {"policy-admission-event.json"}
+        assert not (stage / ".ruff_cache").exists()
+    finally:
+        evidence_publication._remove_stage(repo, container)
+
+
+@pytest.mark.parametrize("role", ["report", "event"])
+def test_pinned_public_directory_prevents_symlink_redirection(
+    tmp_path: Path, role: str
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    relative = dict(evidence_publication.ARTIFACTS)[role]
+    original = repo / relative.parent
+    pinned = original.with_name(f"evidence-pinned-{role}")
+    redirected = tmp_path / f"redirected-{role}"
+    redirected.mkdir()
+    replacement = tmp_path / "replacement.json"
+    replacement.write_text('{"status":"replacement"}\n', encoding="utf-8")
+
+    with evidence_publication._open_live_artifacts(
+        repo, create_parents=False
+    ) as live:
+        original.rename(pinned)
+        original.symlink_to(redirected, target_is_directory=True)
+        artifact = live.by_role()[role]
+        evidence_publication._copy_private_to_live_durable(
+            replacement,
+            artifact,
+            mode=0o644,
+            temporary_name=f".{relative.name}.test.tmp",
+        )
+        with pytest.raises(
+            evidence_publication.PublicationError,
+            match="evidence publication input is invalid",
+        ):
+            evidence_publication._assert_live_bindings(live)
+
+    assert not list(redirected.iterdir())
+    assert json.loads((pinned / relative.name).read_text(encoding="utf-8")) == {
+        "status": "replacement"
+    }
+
+
+def test_state_directory_creation_tolerates_first_use_race(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    state = evidence_publication._state_directory(repo)
+    original_mkdir = Path.mkdir
+    raced = False
+
+    def competing_mkdir(path: Path, *args, **kwargs) -> None:
+        nonlocal raced
+        if path == state and not raced:
+            raced = True
+            original_mkdir(path, *args, **kwargs)
+            raise FileExistsError
+        original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", competing_mkdir)
+    assert evidence_publication._ensure_state_directory(repo) == state
+    assert state.is_dir() and not state.is_symlink()
+
+
+def test_stale_stage_uses_process_start_identity_not_only_pid(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    state = evidence_publication._ensure_state_directory(repo)
+    container = state / "stage-reused-pid"
+    container.mkdir(mode=0o700)
+    actual_start = evidence_publication._process_start_identity(os.getpid())
+    assert actual_start is not None
+    evidence_publication._replace_json_durable(
+        container / evidence_publication.STAGE_MARKER,
+        {
+            "schema_version": evidence_publication.STAGE_SCHEMA,
+            "parent_pid": os.getpid(),
+            "parent_start": actual_start + 1,
+            "child_pid": 0,
+            "child_start": None,
+            "nonce": "0" * 32,
+            "worktree_device": None,
+            "worktree_inode": None,
+        },
+    )
+
+    evidence_publication._cleanup_stale_stages(repo, state)
+    assert not container.exists()
+
+
+def test_special_mode_is_rejected_before_transaction_is_exposed(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    candidate = tmp_path / "candidate"
+    shutil.copytree(repo, candidate)
+    report = repo / ".agent-guard/evidence/agent-guard-report.json"
+    report.chmod(0o4644)
+    state = evidence_publication._ensure_state_directory(repo)
+
+    with evidence_publication._open_live_artifacts(
+        repo, create_parents=False
+    ) as live:
+        with pytest.raises(
+            evidence_publication.PublicationError,
+            match="evidence publication file mode is invalid",
+        ):
+            evidence_publication._begin_transaction(live, state, candidate)
+
+    assert not (state / "transaction").exists()
+    assert not list(
+        state.glob(f"{evidence_publication.TRANSACTION_PREPARATION_PREFIX}*")
+    )
+
+
+def test_consumer_recovers_stale_post_commit_cleanup_state(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    state = evidence_publication._ensure_state_directory(repo)
+    transaction = state / "transaction"
+    transaction.mkdir(mode=0o700)
+    evidence_publication._replace_json_durable(
+        transaction / evidence_publication.TRANSACTION_MARKER,
+        {"schema_version": evidence_publication.TRANSACTION_SCHEMA},
+    )
+    (transaction / "old").mkdir(mode=0o700)
+    (transaction / "new").mkdir(mode=0o700)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/evidence_publication.py",
+            "consume",
+            "--repo",
+            ".",
+            "--consumer",
+            "example",
+        ],
+        cwd=repo,
+        env=demo_environment(temp_dir=tmp_path),
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not transaction.exists()
+
+
+def test_consumer_cleans_transaction_after_marker_unlink_crash(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    marker = tmp_path / "marker-unlinked.ready"
+    writer = start_demo(
+        repo,
+        temp_dir=tmp_path,
+        extra_env={
+            "AGENT_SAFETY_EVIDENCE_TESTING": "1",
+            "AGENT_SAFETY_EVIDENCE_TEST_PAUSE_AT": "after-transaction-marker-unlink",
+            "AGENT_SAFETY_EVIDENCE_TEST_MARKER": str(marker),
+        },
+    )
+    wait_for_marker(marker, writer)
+    state = evidence_publication._state_directory(repo)
+    transaction = state / "transaction"
+    assert transaction.is_dir()
+    assert not (transaction / evidence_publication.TRANSACTION_MARKER).exists()
+    assert not (transaction / evidence_publication.JOURNAL_NAME).exists()
+    writer.kill()
+    writer.communicate(timeout=30)
+
+    recovered = run_snapshot_consumer(repo, temp_dir=tmp_path)
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+    assert not transaction.exists()
+
+
+def test_demo_runner_keeps_live_bundle_before_publish_and_rejects_second_writer(
+    tmp_path: Path,
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    before = public_artifact_bytes(repo)
+    marker = tmp_path / "before-publish.ready"
+    writer = start_demo(
+        repo,
+        temp_dir=tmp_path,
+        extra_env={
+            "AGENT_SAFETY_EVIDENCE_TESTING": "1",
+            "AGENT_SAFETY_EVIDENCE_TEST_PAUSE_AT": "before-publish",
+            "AGENT_SAFETY_EVIDENCE_TEST_MARKER": str(marker),
+        },
+    )
+    wait_for_marker(marker, writer)
+
+    assert public_artifact_bytes(repo) == before
+    second_writer = run_demo(repo, temp_dir=tmp_path)
+    assert second_writer.returncode == 1
+    assert second_writer.stdout == ""
+    assert second_writer.stderr == "evidence publication is already in progress\n"
+
+    writer.terminate()
+    writer.communicate(timeout=30)
+    assert public_artifact_bytes(repo) == before
+
+    recovered = run_demo(repo, temp_dir=tmp_path)
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+    state = evidence_publication._state_directory(repo)
+    assert not list(state.glob("stage-*"))
+    assert not (state / "transaction").exists()
+
+
+@pytest.mark.parametrize(
+    "pause_point", ["after-preparation-directory", "during-preparation-copy"]
+)
+def test_prejournal_crash_keeps_old_bundle_and_is_automatically_cleaned(
+    tmp_path: Path,
+    pause_point: str,
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    before = public_artifact_bytes(repo)
+    marker = tmp_path / f"{pause_point}.ready"
+    writer = start_demo(
+        repo,
+        temp_dir=tmp_path,
+        extra_env={
+            "AGENT_SAFETY_EVIDENCE_TESTING": "1",
+            "AGENT_SAFETY_EVIDENCE_TEST_PAUSE_AT": pause_point,
+            "AGENT_SAFETY_EVIDENCE_TEST_MARKER": str(marker),
+        },
+    )
+    wait_for_marker(marker, writer)
+    writer.kill()
+    writer.communicate(timeout=30)
+
+    state = evidence_publication._state_directory(repo)
+    assert list(state.glob(f"{evidence_publication.TRANSACTION_PREPARATION_PREFIX}*"))
+    assert public_artifact_bytes(repo) == before
+
+    recovered = run_snapshot_consumer(repo, temp_dir=tmp_path)
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+    assert public_artifact_bytes(repo) == before
+    assert not list(
+        state.glob(f"{evidence_publication.TRANSACTION_PREPARATION_PREFIX}*")
+    )
+    assert not list(state.glob("stage-*"))
+
+
+def test_rollback_copy_crash_is_resumed_without_orphaned_public_temp(
+    tmp_path: Path,
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    before = public_artifact_bytes(repo)
+    before_modes = public_artifact_modes(repo)
+    publish_marker = tmp_path / "publish.ready"
+    writer = start_demo(
+        repo,
+        temp_dir=tmp_path,
+        extra_env={
+            "AGENT_SAFETY_EVIDENCE_TESTING": "1",
+            "AGENT_SAFETY_EVIDENCE_TEST_PAUSE_AT": "after-first-replace",
+            "AGENT_SAFETY_EVIDENCE_TEST_MARKER": str(publish_marker),
+        },
+    )
+    wait_for_marker(publish_marker, writer)
+    writer.kill()
+    writer.communicate(timeout=30)
+
+    rollback_marker = tmp_path / "rollback.ready"
+    recovery = subprocess.Popen(
+        [
+            sys.executable,
+            "scripts/evidence_publication.py",
+            "consume",
+            "--repo",
+            ".",
+            "--consumer",
+            "example",
+        ],
+        cwd=repo,
+        env=demo_environment(
+            temp_dir=tmp_path,
+            extra_env={
+                "AGENT_SAFETY_EVIDENCE_TESTING": "1",
+                "AGENT_SAFETY_EVIDENCE_TEST_PAUSE_AT": "during-rollback-copy",
+                "AGENT_SAFETY_EVIDENCE_TEST_MARKER": str(rollback_marker),
+            },
+        ),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    wait_for_marker(rollback_marker, recovery)
+    recovery.kill()
+    recovery.communicate(timeout=30)
+
+    recovered = run_snapshot_consumer(repo, temp_dir=tmp_path)
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+    assert public_artifact_bytes(repo) == before
+    assert public_artifact_modes(repo) == before_modes
+    state = evidence_publication._state_directory(repo)
+    assert not (state / "transaction").exists()
+    for role, relative in evidence_publication.ARTIFACTS:
+        assert not (repo / evidence_publication._rollback_temporary(relative, role)).exists()
+
+
+def test_forged_staging_environment_cannot_bypass_publisher(tmp_path: Path) -> None:
+    repo = copy_demo_repo(tmp_path)
+    before = public_artifact_bytes(repo)
+    result = run_demo(
+        repo,
+        temp_dir=tmp_path,
+        extra_env={
+            "AGENT_SAFETY_EVIDENCE_STAGE_CONTAINER": str(tmp_path),
+            "AGENT_SAFETY_EVIDENCE_STAGE_NONCE": "0" * 32,
+            "AGENT_SAFETY_EVIDENCE_GATE_FD": "9",
+        },
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "Evidence staging authorization failed.\n"
+    assert public_artifact_bytes(repo) == before
+
+
+@pytest.mark.parametrize("kill_parent", [False, True])
+def test_killed_staged_child_leaves_no_unrecoverable_backup(
+    tmp_path: Path, kill_parent: bool
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    writer = start_demo(repo, temp_dir=tmp_path, extra_env={})
+    state = evidence_publication._state_directory(repo)
+    deadline = time.monotonic() + 120
+    child_pid: int | None = None
+    while time.monotonic() < deadline:
+        for marker_path in state.glob(f"stage-*/{evidence_publication.STAGE_MARKER}"):
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            container = marker_path.parent
+            if marker.get("child_pid", 0) > 0 and list(
+                container.glob(f"{evidence_publication.STAGE_BACKUP_PREFIX}*")
+            ):
+                child_pid = marker["child_pid"]
+                break
+        if child_pid is not None or writer.poll() is not None:
+            break
+        time.sleep(0.01)
+    if child_pid is None:
+        stdout, stderr = writer.communicate(timeout=30)
+        pytest.fail(f"staged child did not expose backup state: {stdout}{stderr}")
+    if kill_parent:
+        writer.kill()
+    os.kill(child_pid, signal.SIGKILL)
+    writer.communicate(timeout=30)
+    assert writer.returncode != 0
+    if not kill_parent:
+        assert not list(state.glob("stage-*"))
+
+    recovered = run_demo(repo, temp_dir=tmp_path)
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+    assert not list(state.glob("stage-*"))
+
+
+@pytest.mark.parametrize("termination_signal", [signal.SIGTERM, signal.SIGKILL])
+def test_interrupted_publish_is_recovered_for_a_cooperating_reader(
+    tmp_path: Path,
+    termination_signal: signal.Signals,
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    before = public_artifact_bytes(repo)
+    before_modes = public_artifact_modes(repo)
+    publish_marker = tmp_path / f"publish-{termination_signal.name}.ready"
+    reader_marker = tmp_path / f"reader-{termination_signal.name}.ready"
+    writer = start_demo(
+        repo,
+        temp_dir=tmp_path,
+        extra_env={
+            "AGENT_SAFETY_EVIDENCE_TESTING": "1",
+            "AGENT_SAFETY_EVIDENCE_TEST_PAUSE_AT": "after-first-replace",
+            "AGENT_SAFETY_EVIDENCE_TEST_MARKER": str(publish_marker),
+        },
+    )
+    wait_for_marker(publish_marker, writer)
+
+    reader_env = demo_environment(
+        temp_dir=tmp_path,
+        extra_env={
+            "AGENT_SAFETY_EVIDENCE_TESTING": "1",
+            "AGENT_SAFETY_EVIDENCE_TEST_READER_WAIT_MARKER": str(reader_marker),
+        },
+    )
+    reader = subprocess.Popen(
+        [
+            sys.executable,
+            "scripts/evidence_publication.py",
+            "consume",
+            "--repo",
+            ".",
+            "--consumer",
+            "packaged",
+        ],
+        cwd=repo,
+        env=reader_env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    wait_for_marker(reader_marker, reader)
+    assert reader.poll() is None
+
+    writer.send_signal(termination_signal)
+    writer.communicate(timeout=30)
+    reader_stdout, reader_stderr = reader.communicate(timeout=120)
+
+    assert reader.returncode == 0, reader_stdout + reader_stderr
+    assert public_artifact_bytes(repo) == before
+    assert public_artifact_modes(repo) == before_modes
+    state = evidence_publication._state_directory(repo)
+    assert not (state / "transaction").exists()
+
+    recovered = run_demo(repo, temp_dir=tmp_path)
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+    assert not list(state.glob("stage-*"))
 
 
 def test_demo_runner_rejects_decision_with_expected_exit_but_wrong_identity(tmp_path: Path) -> None:

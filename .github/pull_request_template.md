@@ -9,8 +9,8 @@ Describe the change and why it is needed.
 - [ ] `agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json`
 - [ ] `agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml`
 - [ ] `agent-guard conformance check --root . --evidence .agent-guard/evidence/agent-guard-report.json --profile recommended --json`
-- [ ] `python examples/evidence_consumer.py --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 .agent-guard/evidence/agent-guard-report.json`
-- [ ] `python -m agent_guard.consumer --evidence-dir .agent-guard/evidence --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 .agent-guard/evidence/agent-guard-report.json`
+- [ ] `python scripts/evidence_publication.py consume --repo . --consumer example`
+- [ ] `python scripts/evidence_publication.py consume --repo . --consumer packaged`
 
 ## Safety check
 

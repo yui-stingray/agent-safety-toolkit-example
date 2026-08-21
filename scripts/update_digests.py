@@ -11,6 +11,8 @@ POLICY_PATH = ROOT / ".agent-guard" / "context-digest-policy.yaml"
 PINNED_FILES = [
     ("agent_context", "AGENTS.md"),
     ("readme", "README.md"),
+    ("demo_runner", "scripts/run_demo.sh"),
+    ("evidence_publisher", "scripts/evidence_publication.py"),
     ("bounded_guard_runner", "scripts/run_agent_guard_bounded.sh"),
     ("policy_event_contract", "scripts/policy_event_contract.py"),
     ("policy_wrapper", "scripts/policy_admit.py"),
