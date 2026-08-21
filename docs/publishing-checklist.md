@@ -4,7 +4,8 @@ Use this checklist before making a demo repository public or before linking it f
 
 - Runtime admission has both allowed and blocked examples.
 - Static repository guards, including agent context checks, run in CI and locally.
-- Surface inventory v2, drift v2, recommended conformance, and evidence-pack manifest checks run in CI and locally.
+- Surface inventory v2, drift v2, recommended conformance, and evidence-pack manifest v2 checks run in CI and locally.
+- Each public audit event has a v2 content binding validated by both consumers with the same repository-relative path and recognized profile.
 - CI has read-only repository permissions.
 - GitHub Actions are pinned to commit SHAs.
 - Dependencies are exact and hash-pinned.

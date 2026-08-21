@@ -21,7 +21,9 @@ RUN_DEMO = ROOT / "scripts" / "run_demo.sh"
 BOUNDED_GUARD = ROOT / "scripts" / "run_agent_guard_bounded.sh"
 ADVERSARIAL_FIXTURES = ROOT / "fixtures" / "adversarial"
 EVIDENCE_DIR = ROOT / ".agent-guard" / "evidence"
-AUDIT_EVENT = ROOT / ".agent-policy" / "evidence" / "policy-admission-event.json"
+AUDIT_EVENT_RELATIVE_PATH = ".agent-policy/evidence/policy-admission-event.json"
+AUDIT_EVENT = ROOT / AUDIT_EVENT_RELATIVE_PATH
+AUDIT_EVENT_PROFILE = "agent-guard.public_agent_policy_audit_event.v1"
 PUBLIC_BUNDLE_FILENAMES = {
     "agent-guard-evidence-pack.json",
     "agent-guard-report.json",
@@ -93,7 +95,12 @@ def run_demo(
     )
 
 
-def full_report_args(*, output: Path | None = None) -> tuple[str, ...]:
+def full_report_args(
+    *,
+    output: Path | None = None,
+    audit_event_path: str | Path = AUDIT_EVENT_RELATIVE_PATH,
+    audit_event_profile: str = AUDIT_EVENT_PROFILE,
+) -> tuple[str, ...]:
     args = [
         "report",
         "--root",
@@ -109,13 +116,48 @@ def full_report_args(*, output: Path | None = None) -> tuple[str, ...]:
         "--digest-policy",
         ".agent-guard/context-digest-policy.yaml",
         "--agent-policy-audit-event",
-        ".agent-policy/evidence/policy-admission-event.json",
+        str(audit_event_path),
+        "--agent-policy-audit-event-profile",
+        audit_event_profile,
         "--format",
         "json",
     ]
     if output is not None:
         args.extend(["--output", str(output)])
     return tuple(args)
+
+
+def run_consumers(
+    *,
+    evidence_dir: Path | None,
+    report_path: Path,
+    audit_event_paths: tuple[Path, ...] = (AUDIT_EVENT,),
+    audit_event_profile: str = AUDIT_EVENT_PROFILE,
+    cwd: Path = ROOT,
+) -> list[subprocess.CompletedProcess[str]]:
+    args: list[str] = []
+    if evidence_dir is not None:
+        args.extend(["--evidence-dir", str(evidence_dir)])
+    for audit_event_path in audit_event_paths:
+        args.extend(["--agent-policy-audit-event", str(audit_event_path)])
+    if audit_event_profile:
+        args.extend(["--agent-policy-audit-event-profile", audit_event_profile])
+    args.append(str(report_path))
+
+    commands = (
+        [sys.executable, str(EVIDENCE_CONSUMER)],
+        [sys.executable, "-m", "agent_guard.consumer"],
+    )
+    return [
+        subprocess.run(
+            [*command, *args],
+            cwd=cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        for command in commands
+    ]
 
 
 def test_contributing_uses_current_context_digest_policy_name() -> None:
@@ -256,13 +298,14 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "python3.12 -m venv .venv" in recipe
     assert "after adding or adapting the target repository's tests" in recipe
     assert "python scripts/validate_policy_event.py .agent-policy/evidence/policy-admission-event.json" in recipe
-    assert "python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in recipe
+    assert "python examples/evidence_consumer.py --agent-policy-audit-event" in recipe
     assert "python -m agent_guard.consumer --evidence-dir .agent-guard/evidence" in recipe
     assert "recommended-profile conformance" in readme
     assert "--evidence-preset recommended" in readme
     assert "agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json" in readme
     assert "--mcp-policy .agent-guard/mcp-policy.yaml" in readme
     assert "--agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json" in readme
+    assert "--agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1" in readme
     assert "--repo-alias agent-safety-toolkit-example-public" in readme
     assert "`--repo-alias` is required" in readme
     assert "never used as an audit-event" in readme
@@ -278,7 +321,8 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "scripts/policy_event_contract.py" in readme
     assert "one public-safe field grammar" in readme
     assert "sanitized `agent-policy`" in recipe
-    assert "audit-event artifact reference" in recipe
+    assert "audit-event content binding" in recipe
+    assert "agent-guard.public_agent_policy_audit_event.v1" in recipe
     assert "Do not copy or publish" in recipe
     assert "public audit-event aliases passed as `--repo-alias`" in recipe
     assert "shared action-to-capability contract" in recipe
@@ -292,9 +336,11 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     assert "model router" in recipe
     assert "de-personalized" in checklist
     assert "Public evidence handoffs do not include raw per-scanner JSON" in checklist
+    assert "v2 content binding" in checklist
     assert "python -m pytest -q" in pr_template
-    assert "python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json" in pr_template
-    assert "python -m agent_guard.consumer --evidence-dir .agent-guard/evidence" in pr_template
+    assert "python examples/evidence_consumer.py --agent-policy-audit-event" in pr_template
+    assert "python -m agent_guard.consumer --evidence-dir .agent-guard/evidence --agent-policy-audit-event" in pr_template
+    assert "agent-guard.public_agent_policy_audit_event.v1" in pr_template
     assert "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7" in ci_workflow
     assert "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6" not in ci_workflow
     assert 'python-version: "3.12"' in ci_workflow
@@ -330,8 +376,8 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "- `scripts/run_agent_guard_bounded.sh`" in recipe
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
-        "yui-agent-guard==0.3.4 \\\n"
-        "    --hash=sha256:855589e93e6df34534c686969caa5d06e7aaa32ae4cb0ba1c70aadecca671bce"
+        "yui-agent-guard==0.3.5 \\\n"
+        "    --hash=sha256:5375d0b23d944a799b57a068c4362cc17218951a93b8741be360825655138ab4"
         in requirements
     )
     assert (
@@ -351,6 +397,7 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "stricter public-artifact profile" in readme
     assert "does not replace" in readme
     assert "raw repo identifier, local path, or secret-shaped value checks" in readme
+    assert "agent-guard.public_agent_policy_audit_event.v1" in readme
 
 
 def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
@@ -364,8 +411,10 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
         normalized = " ".join(document.split())
         assert "CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64" in normalized
         assert "GNU `timeout`" in normalized
-        assert "12-second external supervisor" in normalized or "for 12 seconds" in normalized
-        assert "not a fixed `agent-guard` release" in normalized
+        assert "12-second external supervisor" in normalized
+        assert "0.3.5 independently bounds context scans" in normalized
+        assert "defense in depth" in normalized
+        assert "not a fixed `agent-guard` release" not in normalized
         assert "not an atomic" in normalized
         assert "`SIGKILL`, host power loss, and concurrent readers" in normalized
         assert "isolated checkout" in normalized
@@ -390,38 +439,19 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
     )
 
 
-def test_v1_audit_event_reference_limit_and_v2_migration_are_documented() -> None:
+def test_v2_audit_event_content_binding_is_documented() -> None:
     documents = (
         (ROOT / "README.md").read_text(encoding="utf-8"),
         ADOPTION_RECIPE.read_text(encoding="utf-8"),
     )
-    required_statements = (
-        (
-            "In the current `agent-guard` 0.3.4 v1 report and manifest, the audit-event "
-            "artifact reference records only the sanitized path and role."
-        ),
-        (
-            "It does not bind or verify event content identity, schema/profile semantics, or "
-            "substitution."
-        ),
-        (
-            "The demo's own event schema validation is separate and is not a cryptographic "
-            "or content binding."
-        ),
-        "This v2 migration is dependency-gated.",
-        (
-            "Only after a formally published compatible `agent-guard` release should "
-            "maintainers update the exact hash pin, pass the identical event path and a "
-            "recognized profile to the report/manifest producer and packaged consumer, "
-            "regenerate v2 evidence, and test substitution rejection."
-        ),
-        "Until then, retain the current 0.3.4 pin and v1 evidence.",
-    )
-
     for document in documents:
         normalized_document = document.replace("\n", " ")
-        for statement in required_statements:
-            assert statement in normalized_document
+        assert "agent-guard.report_evidence.v2" in normalized_document or "report and evidence-pack manifest v2" in normalized_document
+        assert "agent-guard.evidence_pack_manifest.v2" in normalized_document or "report and evidence-pack manifest v2" in normalized_document
+        assert AUDIT_EVENT_PROFILE in normalized_document
+        assert "substitution" in normalized_document
+        assert "0.3.4 v1" not in normalized_document
+        assert "does not bind or verify event content identity" not in normalized_document
 
 
 def test_committed_adversarial_fixtures_are_inert_and_isolated() -> None:
@@ -453,22 +483,12 @@ def test_committed_public_bundle_matches_consumer_contract() -> None:
     assert {path.name for path in entries} == PUBLIC_BUNDLE_FILENAMES
     assert all(path.is_file() and not path.is_symlink() for path in entries)
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "agent_guard.consumer",
-            "--evidence-dir",
-            str(EVIDENCE_DIR),
-            str(EVIDENCE_DIR / "agent-guard-report.json"),
-        ],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
+    results = run_consumers(
+        evidence_dir=EVIDENCE_DIR,
+        report_path=EVIDENCE_DIR / "agent-guard-report.json",
     )
 
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert all(result.returncode == 0 for result in results)
 
 
 def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> None:
@@ -483,6 +503,10 @@ def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> N
     assert all(path.is_file() and not path.is_symlink() for path in entries)
     first_evidence = {path.name: path.read_bytes() for path in sorted(evidence_dir.glob("*.json"))}
     first_event = audit_event.read_bytes()
+    report = json.loads((evidence_dir / "agent-guard-report.json").read_text(encoding="utf-8"))
+    manifest = report["evidence_pack_manifest"]
+    assert report["report"]["schema_version"] == "agent-guard.report_evidence.v2"
+    assert manifest["schema_version"] == "agent-guard.evidence_pack_manifest.v2"
 
     second_result = run_demo(repo, temp_dir=tmp_path)
 
@@ -635,9 +659,8 @@ def test_demo_runner_bounds_unreviewed_context_regex_without_leaking_it(
     result = run_demo(repo, temp_dir=tmp_path)
 
     assert result.returncode != 0
-    assert result.stderr == (
-        "agent-guard context evaluation exceeded the external execution budget\n"
-    )
+    assert "context scan exceeded execution budget" in result.stdout + result.stderr
+    assert "agent-guard context evaluation exceeded the external execution budget" not in result.stdout + result.stderr
     assert pattern not in result.stdout + result.stderr
     assert context_line not in result.stdout + result.stderr
     after_bundle = {path.name: path.read_bytes() for path in evidence_dir.iterdir() if path.is_file()}
@@ -732,7 +755,7 @@ def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
     payload = json.loads(result.stdout)
     assert payload["status"] == "ok"
     assert payload["command"] == "report"
-    assert payload["report"]["schema_version"] == "agent-guard.report_evidence.v1"
+    assert payload["report"]["schema_version"] == "agent-guard.report_evidence.v2"
     assert payload["report"]["format"] == "json"
     assert payload["report"]["sanitized"] is True
     assert payload["surface_inventory"]["schema_version"] == "agent-guard.agent_surface_inventory.v2"
@@ -742,9 +765,18 @@ def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
     assert payload["conformance"]["profile"] == "recommended"
     assert payload["conformance"]["status"] == "ok"
     assert payload["mcp_config"]["policy"]["path"] == ".agent-guard/mcp-policy.yaml"
-    assert payload["evidence_pack_manifest"]["schema_version"] == "agent-guard.evidence_pack_manifest.v1"
-    artifact_roles = {item["role"] for item in payload["evidence_pack_manifest"]["artifacts"]}
-    assert "agent-policy-audit-event" in artifact_roles
+    manifest = payload["evidence_pack_manifest"]
+    assert manifest["schema_version"] == "agent-guard.evidence_pack_manifest.v2"
+    assert manifest["artifacts"][0]["path"] == AUDIT_EVENT_RELATIVE_PATH
+    assert manifest["artifacts"][0]["role"] == "agent-policy-audit-event"
+    binding = manifest["artifacts"][0]["content_binding"]
+    assert binding["schema_version"] == "agent-guard.agent_policy_audit_event_binding.v1"
+    assert binding["event_profile"] == AUDIT_EVENT_PROFILE
+    assert binding["canonicalization"] == "canonical-json-v1"
+    assert binding["digest_algorithm"] == "sha256"
+    assert binding["digest_encoding"] == "base32-lower-no-padding"
+    assert binding["digest"].startswith("b")
+    assert len(binding["digest"]) == 53
     assert payload["context_lock"]["status"] == "ok"
     assert payload["context_lock"]["covered_count"] == payload["context_lock"]["checked_count"]
     assert payload["context_lock"]["covered"] == [
@@ -762,50 +794,59 @@ def test_report_json_is_sanitized_and_contains_context_lock_evidence() -> None:
     assert "Shell, filesystem write" not in serialized
     assert "snippet" not in serialized
     assert "matched_text" not in serialized
+    assert AUDIT_EVENT.read_text(encoding="utf-8").strip() not in serialized
 
 
 def test_report_output_file_is_sanitized_and_repo_relative(tmp_path: Path) -> None:
-    output = tmp_path / "evidence" / "agent-guard-report.json"
-    result = run_guard(*full_report_args(output=output))
+    repo = copy_demo_repo(tmp_path)
+    output = repo / ".agent-guard" / "evidence" / "agent-guard-report.json"
+    result = run_guard(*full_report_args(output=output), cwd=repo)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == ""
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "ok"
-    assert payload["report"]["schema_version"] == "agent-guard.report_evidence.v1"
+    assert payload["report"]["schema_version"] == "agent-guard.report_evidence.v2"
     assert payload["surface_inventory"]["schema_version"] == "agent-guard.agent_surface_inventory.v2"
     assert payload["conformance"]["status"] == "ok"
     assert payload["mcp_config"]["policy"]["path"] == ".agent-guard/mcp-policy.yaml"
     assert payload["evidence_pack_manifest"]["artifacts"] == [
-        {"path": "agent-guard-report.json", "role": "report"},
-        {"path": ".agent-policy/evidence/policy-admission-event.json", "role": "agent-policy-audit-event"},
+        {"path": ".agent-guard/evidence/agent-guard-report.json", "role": "report"},
+        {
+            "path": AUDIT_EVENT_RELATIVE_PATH,
+            "role": "agent-policy-audit-event",
+            "content_binding": payload["evidence_pack_manifest"]["artifacts"][1]["content_binding"],
+        },
     ]
+    assert payload["evidence_pack_manifest"]["schema_version"] == "agent-guard.evidence_pack_manifest.v2"
+    assert payload["evidence_pack_manifest"]["artifacts"][1]["content_binding"]["event_profile"] == AUDIT_EVENT_PROFILE
     assert payload["context_lock"]["covered_count"] == 1
     serialized = json.dumps(payload, sort_keys=True)
     assert str(ROOT) not in serialized
+    assert str(repo) not in serialized
     assert "Shell, filesystem write" not in serialized
     assert "snippet" not in serialized
     assert "matched_text" not in serialized
 
 
 def test_evidence_consumer_accepts_recommended_report(tmp_path: Path) -> None:
-    output = tmp_path / "evidence" / "agent-guard-report.json"
-    report = run_guard(*full_report_args(output=output))
-    assert report.returncode == 0, report.stdout + report.stderr
+    repo = copy_demo_repo(tmp_path)
+    demo = run_demo(repo, temp_dir=tmp_path)
+    assert demo.returncode == 0, demo.stdout + demo.stderr
 
-    result = subprocess.run(
-        [sys.executable, str(EVIDENCE_CONSUMER), str(output)],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
+    results = run_consumers(
+        evidence_dir=repo / ".agent-guard" / "evidence",
+        report_path=repo / ".agent-guard" / "evidence" / "agent-guard-report.json",
+        audit_event_paths=(repo / AUDIT_EVENT_RELATIVE_PATH,),
+        cwd=repo,
     )
 
-    assert result.returncode == 0, result.stdout + result.stderr
-    summary = json.loads(result.stdout)
-    assert summary["status"] == "ok"
-    assert summary["conformance_status"] == "ok"
-    assert summary["enabled_gate_count"] >= 6
+    assert all(result.returncode == 0 for result in results)
+    for result in results:
+        summary = json.loads(result.stdout)
+        assert summary["status"] == "ok"
+        assert summary["conformance_status"] == "ok"
+        assert summary["enabled_gate_count"] >= 6
 
 
 @pytest.mark.parametrize(
@@ -842,24 +883,92 @@ def test_evidence_consumer_matches_packaged_consumer_for_invalid_bundles(
         raise AssertionError(f"unknown mutation case: {case}")
     artifact_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
 
-    commands = (
-        [sys.executable, str(EVIDENCE_CONSUMER)],
-        [sys.executable, "-m", "agent_guard.consumer"],
+    results = run_consumers(
+        evidence_dir=evidence_dir,
+        report_path=evidence_dir / "agent-guard-report.json",
     )
-    results = [
-        subprocess.run(
-            [*command, "--evidence-dir", str(evidence_dir), str(evidence_dir / "agent-guard-report.json")],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        for command in commands
-    ]
 
     assert results[0].returncode == results[1].returncode == 1
     assert results[0].stdout == results[1].stdout
     assert results[0].stderr == results[1].stderr
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "event_substitution",
+        "missing_event",
+        "extra_event",
+        "wrong_event_path",
+        "wrong_event_profile",
+    ],
+)
+def test_v2_evidence_consumers_fail_closed_for_bound_event_errors(
+    tmp_path: Path,
+    case: str,
+) -> None:
+    evidence_dir = tmp_path / "evidence"
+    shutil.copytree(EVIDENCE_DIR, evidence_dir)
+    event = tmp_path / "policy-admission-event.json"
+    shutil.copy2(AUDIT_EVENT, event)
+    audit_event_paths: tuple[Path, ...] = (event,)
+    audit_event_profile = AUDIT_EVENT_PROFILE
+
+    if case == "event_substitution":
+        payload = json.loads(event.read_text(encoding="utf-8"))
+        payload["decision"]["mode"] = "deny"
+        event.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    elif case == "missing_event":
+        audit_event_paths = ()
+        audit_event_profile = ""
+    elif case == "extra_event":
+        audit_event_paths = (event, event)
+    elif case == "wrong_event_path":
+        audit_event_paths = (tmp_path / "missing-event.json",)
+    elif case == "wrong_event_profile":
+        audit_event_profile = "agent-policy.audit_event.v1.1"
+    else:
+        raise AssertionError(f"unknown case: {case}")
+
+    results = run_consumers(
+        evidence_dir=evidence_dir,
+        report_path=evidence_dir / "agent-guard-report.json",
+        audit_event_paths=audit_event_paths,
+        audit_event_profile=audit_event_profile,
+    )
+
+    assert results[0].returncode == results[1].returncode == 1
+    assert results[0].stdout == results[1].stdout
+    assert results[0].stderr == results[1].stderr
+    assert str(tmp_path) not in results[0].stdout + results[0].stderr
+
+
+@pytest.mark.parametrize(
+    ("audit_event_path", "audit_event_profile"),
+    [
+        ("outside-repository-event.json", AUDIT_EVENT_PROFILE),
+        (AUDIT_EVENT_RELATIVE_PATH, "agent-policy.audit_event.v1.1"),
+    ],
+)
+def test_report_rejects_wrong_bound_event_path_or_profile(
+    tmp_path: Path,
+    audit_event_path: str,
+    audit_event_profile: str,
+) -> None:
+    if audit_event_path == "outside-repository-event.json":
+        external_event = tmp_path / audit_event_path
+        shutil.copy2(AUDIT_EVENT, external_event)
+        audit_event_path = str(external_event)
+
+    result = run_guard(
+        *full_report_args(
+            audit_event_path=audit_event_path,
+            audit_event_profile=audit_event_profile,
+        )
+    )
+
+    assert result.returncode != 0
+    assert str(tmp_path) not in result.stdout + result.stderr
 
 
 def test_context_inventory_does_not_emit_raw_sensitive_context(tmp_path: Path) -> None:

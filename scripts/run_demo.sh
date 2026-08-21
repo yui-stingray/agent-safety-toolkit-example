@@ -27,7 +27,7 @@ if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] ==
 fi
 
 if ! command -v timeout >/dev/null 2>&1; then
-  echo "A timeout supervisor is required for the published agent-guard 0.3.4 context checks." >&2
+  echo "A timeout supervisor is required for the agent-guard 0.3.5 defense-in-depth context checks." >&2
   exit 1
 fi
 
@@ -49,6 +49,7 @@ CONTENT_TARGETS=(
 EVIDENCE_DIR=".agent-guard/evidence"
 AUDIT_EVENT_DIR=".agent-policy/evidence"
 AUDIT_EVENT_PATH="$AUDIT_EVENT_DIR/policy-admission-event.json"
+AUDIT_EVENT_PROFILE="agent-guard.public_agent_policy_audit_event.v1"
 AUDIT_EVENT_STAGE="$AUDIT_EVENT_DIR/.policy-admission-event.json.tmp"
 SURFACE_INVENTORY_TMP=""
 REPORT_PATH="$EVIDENCE_DIR/agent-guard-report.json"
@@ -264,6 +265,7 @@ run_bounded_context_guard report \
   --mcp-policy .agent-guard/mcp-policy.yaml \
   --digest-policy .agent-guard/context-digest-policy.yaml \
   --agent-policy-audit-event "$AUDIT_EVENT_PATH" \
+  --agent-policy-audit-event-profile "$AUDIT_EVENT_PROFILE" \
   --format json \
   --output "$REPORT_PATH"
 "$PYTHON_BIN" -m agent_guard.cli conformance check \
@@ -276,10 +278,18 @@ run_bounded_context_guard report \
   --report "$REPORT_PATH" \
   --artifact "$REPORT_PATH" \
   --agent-policy-audit-event "$AUDIT_EVENT_PATH" \
+  --agent-policy-audit-event-profile "$AUDIT_EVENT_PROFILE" \
   --json \
   > "$EVIDENCE_PACK_STAGE"
 mv -- "$EVIDENCE_PACK_STAGE" "$EVIDENCE_PACK_PATH"
-"$PYTHON_BIN" examples/evidence_consumer.py "$REPORT_PATH"
-"$PYTHON_BIN" -m agent_guard.consumer --evidence-dir "$EVIDENCE_DIR" "$REPORT_PATH"
+"$PYTHON_BIN" examples/evidence_consumer.py \
+  --agent-policy-audit-event "$AUDIT_EVENT_PATH" \
+  --agent-policy-audit-event-profile "$AUDIT_EVENT_PROFILE" \
+  "$REPORT_PATH"
+"$PYTHON_BIN" -m agent_guard.consumer \
+  --evidence-dir "$EVIDENCE_DIR" \
+  --agent-policy-audit-event "$AUDIT_EVENT_PATH" \
+  --agent-policy-audit-event-profile "$AUDIT_EVENT_PROFILE" \
+  "$REPORT_PATH"
 
 PUBLISH_COMPLETE=1
