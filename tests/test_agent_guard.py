@@ -325,6 +325,40 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "raw repo identifier, local path, or secret-shaped value checks" in readme
 
 
+def test_v1_audit_event_reference_limit_and_v2_migration_are_documented() -> None:
+    documents = (
+        (ROOT / "README.md").read_text(encoding="utf-8"),
+        ADOPTION_RECIPE.read_text(encoding="utf-8"),
+    )
+    required_statements = (
+        (
+            "In the current `agent-guard` 0.3.4 v1 report and manifest, the audit-event "
+            "artifact reference records only the sanitized path and role."
+        ),
+        (
+            "It does not bind or verify event content identity, schema/profile semantics, or "
+            "substitution."
+        ),
+        (
+            "The demo's own event schema validation is separate and is not a cryptographic "
+            "or content binding."
+        ),
+        "This v2 migration is dependency-gated.",
+        (
+            "Only after a formally published compatible `agent-guard` release should "
+            "maintainers update the exact hash pin, pass the identical event path and a "
+            "recognized profile to the report/manifest producer and packaged consumer, "
+            "regenerate v2 evidence, and test substitution rejection."
+        ),
+        "Until then, retain the current 0.3.4 pin and v1 evidence.",
+    )
+
+    for document in documents:
+        normalized_document = document.replace("\n", " ")
+        for statement in required_statements:
+            assert statement in normalized_document
+
+
 def test_committed_adversarial_fixtures_are_inert_and_isolated() -> None:
     readme = (ADVERSARIAL_FIXTURES / "README.md").read_text(encoding="utf-8")
     fixture_rows = [
