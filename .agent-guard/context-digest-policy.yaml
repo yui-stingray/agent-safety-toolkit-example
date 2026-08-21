@@ -5,10 +5,10 @@ checks:
     sha256: 1836da432c9a190aa0d086ec8e45fe7733fdaf0ba592d5f2949849a81346e863
   - id: readme
     path: README.md
-    sha256: df79b96c87549c23bddb48e7df0d36bfe81ee415e1344845a406b793c30fa722
+    sha256: 7a304e4c78a2f7ca7b466bc108c3e558031b90a5ef13d5d6b811840726f0161a
   - id: bounded_guard_runner
     path: scripts/run_agent_guard_bounded.sh
-    sha256: fd72a93904082523fdfe8e302fde12f7549390a5a94ef7f75245b489a4ec5ca3
+    sha256: ba88822fd108b98d87767310210a8f117dbdd929965216d2dfade8bffd467b45
   - id: policy_event_contract
     path: scripts/policy_event_contract.py
     sha256: 830d3137d8c18fdd486a4e77cad7fd8fd0cc14e57c8bac7136a881334856f74a

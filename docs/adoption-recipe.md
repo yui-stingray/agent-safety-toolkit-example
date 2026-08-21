@@ -78,8 +78,8 @@ python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
 python -m pytest -q
 bash scripts/run_demo.sh
 python scripts/validate_policy_event.py .agent-policy/evidence/policy-admission-event.json
-python examples/evidence_consumer.py .agent-guard/evidence/agent-guard-report.json
-python -m agent_guard.consumer --evidence-dir .agent-guard/evidence .agent-guard/evidence/agent-guard-report.json
+python examples/evidence_consumer.py --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 .agent-guard/evidence/agent-guard-report.json
+python -m agent_guard.consumer --evidence-dir .agent-guard/evidence --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 .agent-guard/evidence/agent-guard-report.json
 ```
 
 If dependency hashes do not match on the target platform, regenerate the lock
@@ -87,12 +87,11 @@ file for that platform instead of removing hash checking.
 The checked-in lock targets CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64,
 and `run_demo.sh` rejects a different interpreter. Set `PYTHON` explicitly when
 needed. Generate a separate hash lock and CI job before claiming another
-platform. The demo also requires GNU `timeout` and supervises the published
-`agent-guard` 0.3.4 context check, context inventory, surface inventory, context
-lock, and report for 12 seconds.
-This mitigates the published version's unbounded custom context-regex execution;
-it is not a fixed `agent-guard` release, so review context-policy changes before
-execution.
+platform. The demo also requires GNU `timeout`. `agent-guard` 0.3.5
+independently bounds context scans, including custom context-policy regular
+expressions. The demo retains a 12-second external supervisor around context
+check, context inventory, surface inventory, context lock, and report as
+defense in depth; review context-policy changes before execution.
 
 The runner restores its snapshot after ordinary catchable failures, but
 publication across `.agent-guard` and `.agent-policy` is not an atomic
@@ -100,19 +99,20 @@ transaction. `SIGKILL`, host power loss, and concurrent readers are outside the
 guarantee. Run it in an isolated checkout with one writer and consume or publish
 the evidence set only after a successful exit.
 
-## Audit-event Reference Limitation and Migration
+## Bound Audit Events
 
-In the current `agent-guard` 0.3.4 v1 report and manifest, the audit-event
-artifact reference records only the sanitized path and role. It does not bind or
-verify event content identity, schema/profile semantics, or substitution. The
-demo's own event schema validation is separate and is not a cryptographic or
-content binding.
+`agent-guard` 0.3.5 emits report and evidence-pack manifest v2 artifacts when
+the report and manifest producer receive the same repository-relative audit
+event path and the recognized
+`agent-guard.public_agent_policy_audit_event.v1` profile. The v2 entry binds
+canonical JSON content with sanitized digest metadata; it does not embed the
+raw event body.
 
-This v2 migration is dependency-gated. Only after a formally published
-compatible `agent-guard` release should maintainers update the exact hash pin,
-pass the identical event path and a recognized profile to the report/manifest
-producer and packaged consumer, regenerate v2 evidence, and test substitution
-rejection. Until then, retain the current 0.3.4 pin and v1 evidence.
+Pass that same path and profile to both consumers. They fail closed on event
+substitution, wrong profile or path, report/manifest mismatch, and missing,
+extra, or count-mismatched evidence. The generic
+`agent-policy.audit_event.v1.1` schema is not the profile recognized by
+`agent-guard` 0.3.5; retain this demo's stricter public-artifact event contract.
 
 ## Do Not Copy
 
@@ -142,7 +142,7 @@ logic, or CI guard commands, review:
 - the `agent-guard` context inventory and context lock coverage;
 - the `agent-guard` surface inventory v2 embedded in the report and the
   matching evidence-pack manifest, including a sanitized `agent-policy`
-  audit-event artifact reference;
+  audit-event content binding;
 - the recommended-profile conformance result;
 - digest drift for pinned safety-critical files;
 - workflow drift for required guard commands;
