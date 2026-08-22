@@ -140,8 +140,10 @@ unset -f agent-guard
 
 The temporary `agent-guard` shell function above routes every displayed command
 through the bounded wrapper; it does not invoke the installed executable
-directly. This standalone report command writes only to stdout for inspection;
-only `bash scripts/run_demo.sh` publishes the three fixed evidence paths.
+directly. This standalone report command writes only to stdout for inspection.
+`bash scripts/run_demo.sh` is the documented end-to-end publisher; it invokes
+`scripts/evidence_publication.py run --repo .`, the internal publishing path
+that also mutates the three fixed evidence paths.
 
 Treat the individual per-scanner `--json` outputs above as local inspection or
 CI-internal diagnostics. The public handoff is the sanitized report and
@@ -167,25 +169,59 @@ The fixed public `agent-guard` bundle under `.agent-guard/evidence/` contains:
   including the report and the matching `agent-policy` audit-event content
   binding.
 
-The runner takes an advisory writer lock, snapshots the non-ignored working
-tree into sibling staging, and generates and validates the complete replacement
-there before touching the fixed public paths. Publication uses a durable
-rollback journal and same-filesystem atomic replacement for each file in
-report, manifest, then event order. Removing and syncing the journal is the
-commit point; before that point, an interrupted transaction is rolled back by
-the next runner or snapshot consumer without consuming its backup.
+The internal publisher takes an advisory writer lock, snapshots the non-ignored
+working tree into sibling staging, and generates and validates the complete
+replacement there before touching the fixed public paths. Publication uses a
+durable rollback journal and same-filesystem atomic replacement for each file
+in report, manifest, then event order. Removing and syncing the journal is the
+commit operation. Its decision is linearized while SIGINT and SIGTERM are
+blocked immediately before journal removal: a request observed before that
+decision rolls back, while one delivered after it may return an interrupted
+status with the new complete bundle committed. Before that decision, an
+interrupted transaction is rolled back by the next runner or snapshot consumer
+without consuming its backup.
 It refuses to replace a bundle directory containing unexpected entries, so
 unrelated local evidence is not deleted implicitly.
-Use `scripts/evidence_publication.py consume` for a cooperating reader: it
-recovers any pending transaction and copies all three files into one private
-snapshot under the same lock before invoking the selected consumer. The three
-fixed files still cannot be replaced in one portable filesystem operation, so
-an uncoordinated process that reads the paths directly can observe a transient
-mixed set; it must not treat raw reads as a completed publication. The protocol
-is tested on the documented Ubuntu Linux local-filesystem target and relies on
-its `flock`, `fsync`, and atomic rename semantics. It does not claim equivalent
-crash durability for NFS, Windows, macOS, container volumes, or storage that
-does not honor those semantics.
+Use `scripts/evidence_publication.py consume` in a writable cooperating
+checkout: it takes a nonblocking publication lock and fails fast while a writer
+or another snapshot consumer owns it, so callers retry after the lock owner
+exits. After acquiring the lock, it recovers any pending transaction and copies
+all three files into one private snapshot before invoking the selected consumer.
+
+For an immutable or read-only bundle, direct validation is appropriate only
+when no publisher can mutate the bundle concurrently. Validate it with both
+consumers using the report positional argument and the existing
+`--evidence-dir`, `--agent-policy-audit-event`, and
+`--agent-policy-audit-event-profile` arguments:
+
+```bash
+python examples/evidence_consumer.py \
+  --evidence-dir .agent-guard/evidence \
+  --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json \
+  --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 \
+  .agent-guard/evidence/agent-guard-report.json
+python -m agent_guard.consumer \
+  --evidence-dir .agent-guard/evidence \
+  --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json \
+  --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 \
+  .agent-guard/evidence/agent-guard-report.json
+```
+
+The three fixed files still cannot be replaced in one portable filesystem
+operation, so an uncoordinated process that reads the paths directly can
+observe a transient mixed set; it must not treat raw reads as a completed
+publication. The protocol is tested on the documented Ubuntu Linux
+local-filesystem target. Publication durability relies on `flock`, `fsync`,
+and atomic rename semantics; staged-process cleanup additionally requires
+Linux `/proc` and the `pidfd_open` and `pidfd_send_signal` system calls. It
+does not claim equivalent crash durability or process cleanup for NFS,
+Windows, macOS, container volumes, older kernels without pidfds, or storage
+that does not honor those filesystem semantics.
+Stale-stage recovery signals a recorded child session only while it can pin
+the matching leader identity. If that leader has disappeared while executable
+session members remain, the helper preserves the stage and fails closed rather
+than trusting a reusable numeric session ID; retry after those processes exit
+or inspect that local state before removing it.
 The staging snapshot supports ordinary repositories and linked Git worktrees,
 but rejects Git submodules rather than silently producing a partial snapshot.
 The advisory lock coordinates this helper's writers and readers; it is not an
