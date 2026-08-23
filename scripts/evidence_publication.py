@@ -1627,6 +1627,8 @@ def _consumer_command(repo: Path, snapshot: Path, consumer: str) -> list[str]:
     report = snapshot / ARTIFACTS[0][1]
     event = snapshot / ARTIFACTS[2][1]
     common = [
+        "--repo-root",
+        str(snapshot),
         "--evidence-dir",
         str(evidence_dir),
         "--agent-policy-audit-event",

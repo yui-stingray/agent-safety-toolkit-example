@@ -67,22 +67,19 @@ agent-guard digest check --root . --policy .agent-guard/context-digest-policy.ya
 bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
 ```
 
-## Temporary Policy Dependency Boundary
+## Toolkit Policy Integration Boundary
 
-The pinned `yui-agent-policy` 0.1.11 package remains generically extensible,
-but lacks the generic overlap, context, and brace validation fixes. This demo's
-wrapper supplies only a fixed toolkit preflight before `evaluate()`: it permits
-the intentional current policy names and every `ACTION_CAPABILITIES` value,
-rejects unknown keys such as `wirte`, and rejects differing modes where the
-same repo, capability, and overlapping ownership scopes would be order
-dependent. It preserves identical duplicates and disjoint `internal` and
-`external` rules. Do not require each allowed capability to be declared;
-omission can intentionally use `default_mode`.
-
-The source `agent-policy` version `0.1.12.dev0` is unreleased. Adapt this
-fixed vocabulary with `scripts/policy_admit.py` and the policy/action contract,
-but do not treat it as a generic library replacement. Dependency pin and hash
-changes remain at 0.1.11 until explicit approval of a published release.
+`yui-agent-policy` 0.1.12 includes the generic overlap, context, and brace
+validation fixes. This demo's wrapper retains a fixed-vocabulary preflight
+before `evaluate()` as an integration boundary: it permits the intentional
+current policy names and every `ACTION_CAPABILITIES` value, rejects unknown keys
+such as `wirte`, and rejects differing modes where the same repo, capability,
+and overlapping ownership scopes would be order dependent. It preserves
+identical duplicates and disjoint `internal` and `external` rules. Do not
+require each allowed capability to be declared; omission can intentionally use
+`default_mode`. Adapt this fixed vocabulary with `scripts/policy_admit.py` and
+the policy/action contract, but do not treat it as a generic library
+replacement.
 
 ## First Verification Pass
 
@@ -105,7 +102,7 @@ file for that platform instead of removing hash checking.
 The checked-in lock targets CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64,
 and `run_demo.sh` rejects a different interpreter. Set `PYTHON` explicitly when
 needed. Generate a separate hash lock and CI job before claiming another
-platform. The demo also requires GNU `timeout`. `agent-guard` 0.3.5
+platform. The demo also requires GNU `timeout`. `agent-guard` 0.3.6
 independently bounds context scans, including custom context-policy regular
 expressions. The demo retains a 12-second external supervisor around context
 check, context inventory, surface inventory, context lock, and report as
@@ -137,11 +134,13 @@ consumers using the report positional argument and the existing
 
 ```bash
 python examples/evidence_consumer.py \
+  --repo-root . \
   --evidence-dir .agent-guard/evidence \
   --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json \
   --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 \
   .agent-guard/evidence/agent-guard-report.json
 python -m agent_guard.consumer \
+  --repo-root . \
   --evidence-dir .agent-guard/evidence \
   --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json \
   --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 \
@@ -170,23 +169,23 @@ same-user process that ignores the lock or directly modifies repository files.
 
 ## Bound Audit Events
 
-`agent-guard` 0.3.5 emits report and evidence-pack manifest v2 artifacts when
+`agent-guard` 0.3.6 emits report and evidence-pack manifest v2 artifacts when
 the report and manifest producer receive the same repository-relative audit
 event path and the recognized
 `agent-guard.public_agent_policy_audit_event.v1` profile. The v2 entry binds
 canonical JSON content with sanitized digest metadata; it does not embed the
 raw event body.
 
-Pass that same path and profile to both consumers. At the pinned 0.3.5 release,
-the v2 binding authenticates supplied event content and profile but does not
-prove the supplied event location. Consumers fail closed on content
-substitution, wrong profiles, report/manifest mismatch, and missing, extra, or
-count-mismatched evidence; do not claim wrong-path failure closure yet. A
-future published `agent-guard` release must be explicitly pinned before this
-recipe migrates to its `--repo-root` location proof. Do not add that unsupported
-argument or duplicate guard validation in this recipe. The generic
+Pass that same path and profile to both consumers with `--repo-root .`. At
+0.3.6, v2 consumers verify supplied event content and profile; when given
+`--repo-root`, they also verify the canonical repository-relative event
+location. Consumers fail closed on content substitution, wrong profiles, wrong
+event locations when
+given `--repo-root`, report/manifest mismatch, and missing, extra, or
+count-mismatched evidence. Do not duplicate guard validation in this recipe.
+The generic
 `agent-policy.audit_event.v1.1` schema is not the profile recognized by
-`agent-guard` 0.3.5; retain this demo's stricter public-artifact event contract.
+`agent-guard` 0.3.6; retain this demo's stricter public-artifact event contract.
 
 ## Do Not Copy
 
