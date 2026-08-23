@@ -16,9 +16,9 @@ VALIDATOR = ROOT / "scripts" / "validate_policy_event.py"
 POLICY = ROOT / ".agent-policy" / "policy.toml"
 
 
-def run_admit(*extra: str) -> tuple[int, dict[str, object]]:
+def run_admit(*extra: str, policy: Path = POLICY) -> tuple[int, dict[str, object]]:
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--policy", str(POLICY), *extra],
+        [sys.executable, str(SCRIPT), "--policy", str(policy), *extra],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -40,6 +40,11 @@ def run_validator(path: Path) -> subprocess.CompletedProcess[str]:
 
 def write_json(path: Path, payload: dict[str, object]) -> Path:
     path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def write_policy(path: Path, content: str) -> Path:
+    path.write_text(content, encoding="utf-8")
     return path
 
 
@@ -73,7 +78,7 @@ def test_malformed_invocation_returns_exit_one_without_echoing_input() -> None:
     assert marker not in result.stdout + result.stderr
 
 
-def test_read_docs_is_auto_allowed() -> None:
+def test_current_policy_passes_toolkit_preflight_and_allows_read_docs() -> None:
     code, payload = run_admit(
         "--action",
         "read_docs",
@@ -151,6 +156,227 @@ def test_external_first_write_requires_approval() -> None:
     assert code == 2
     assert payload["mode"] == "require_approval"
     assert payload["reason"] == "hard_guardrail"
+
+
+def test_policy_preflight_rejects_unknown_capability_with_fixed_public_error(tmp_path: Path) -> None:
+    marker = "wirte"
+    policy = write_policy(
+        tmp_path / "policy.toml",
+        """default_mode = "auto_allow"
+
+[[repo_policy]]
+repo = "demo/repo"
+ownership_class = "internal"
+
+[repo_policy.capabilities]
+wirte = "require_approval"
+""",
+    )
+
+    code, payload = run_admit(
+        "--action",
+        "edit_docs",
+        "--repo",
+        "demo/repo",
+        "--ownership-class",
+        "internal",
+        policy=policy,
+    )
+
+    assert code == 1
+    assert payload["status"] == "error"
+    assert payload["error"] == "policy evaluation failed"
+    assert marker not in json.dumps(payload, sort_keys=True)
+
+
+@pytest.mark.parametrize(
+    ("first_mode", "second_mode"),
+    (("auto_allow", "deny"), ("deny", "auto_allow")),
+)
+def test_policy_preflight_rejects_same_scope_conflicts_in_either_order(
+    tmp_path: Path,
+    first_mode: str,
+    second_mode: str,
+) -> None:
+    policy = write_policy(
+        tmp_path / "policy.toml",
+        f"""default_mode = "require_approval"
+
+[[repo_policy]]
+repo = "demo/repo"
+ownership_class = "internal"
+
+[repo_policy.capabilities]
+write = "{first_mode}"
+
+[[repo_policy]]
+repo = "demo/repo"
+ownership_class = "internal"
+
+[repo_policy.capabilities]
+write = "{second_mode}"
+""",
+    )
+
+    code, payload = run_admit(
+        "--action",
+        "edit_docs",
+        "--repo",
+        "demo/repo",
+        "--ownership-class",
+        "internal",
+        policy=policy,
+    )
+
+    assert code == 1
+    assert payload["status"] == "error"
+    assert payload["error"] == "policy evaluation failed"
+
+
+def test_policy_preflight_rejects_wildcard_ownership_conflicts(tmp_path: Path) -> None:
+    policy = write_policy(
+        tmp_path / "policy.toml",
+        """default_mode = "require_approval"
+
+[[repo_policy]]
+repo = "demo/repo"
+
+[repo_policy.capabilities]
+write = "auto_allow"
+
+[[repo_policy]]
+repo = "demo/repo"
+ownership_class = "internal"
+
+[repo_policy.capabilities]
+write = "deny"
+""",
+    )
+
+    code, payload = run_admit(
+        "--action",
+        "edit_docs",
+        "--repo",
+        "demo/repo",
+        "--ownership-class",
+        "internal",
+        policy=policy,
+    )
+
+    assert code == 1
+    assert payload["status"] == "error"
+    assert payload["error"] == "policy evaluation failed"
+
+
+def test_policy_preflight_preserves_identical_duplicates(tmp_path: Path) -> None:
+    policy = write_policy(
+        tmp_path / "policy.toml",
+        """default_mode = "auto_allow"
+
+[[repo_policy]]
+repo = "demo/repo"
+ownership_class = "internal"
+
+[repo_policy.capabilities]
+write = "require_approval"
+
+[[repo_policy]]
+repo = "demo/repo"
+ownership_class = "internal"
+
+[repo_policy.capabilities]
+write = "require_approval"
+""",
+    )
+
+    code, payload = run_admit(
+        "--action",
+        "edit_docs",
+        "--repo",
+        "demo/repo",
+        "--ownership-class",
+        "internal",
+        policy=policy,
+    )
+
+    assert code == 2
+    assert payload["mode"] == "require_approval"
+    assert payload["reason"] == "repo_policy"
+
+
+def test_policy_preflight_preserves_disjoint_ownership_scopes(tmp_path: Path) -> None:
+    policy = write_policy(
+        tmp_path / "policy.toml",
+        """default_mode = "require_approval"
+
+[[repo_policy]]
+repo = "demo/repo"
+ownership_class = "internal"
+
+[repo_policy.capabilities]
+write = "auto_allow"
+
+[[repo_policy]]
+repo = "demo/repo"
+ownership_class = "external"
+
+[repo_policy.capabilities]
+write = "deny"
+""",
+    )
+
+    internal_code, internal_payload = run_admit(
+        "--action",
+        "edit_docs",
+        "--repo",
+        "demo/repo",
+        "--ownership-class",
+        "internal",
+        policy=policy,
+    )
+    external_code, external_payload = run_admit(
+        "--action",
+        "edit_docs",
+        "--repo",
+        "demo/repo",
+        "--ownership-class",
+        "external",
+        policy=policy,
+    )
+
+    assert internal_code == 0
+    assert internal_payload["mode"] == "auto_allow"
+    assert external_code == 3
+    assert external_payload["mode"] == "deny"
+
+
+def test_policy_preflight_allows_capability_omission_for_default_mode(tmp_path: Path) -> None:
+    policy = write_policy(
+        tmp_path / "policy.toml",
+        """default_mode = "auto_allow"
+
+[[repo_policy]]
+repo = "demo/repo"
+ownership_class = "internal"
+
+[repo_policy.capabilities]
+read = "auto_allow"
+""",
+    )
+
+    code, payload = run_admit(
+        "--action",
+        "edit_docs",
+        "--repo",
+        "demo/repo",
+        "--ownership-class",
+        "internal",
+        policy=policy,
+    )
+
+    assert code == 0
+    assert payload["mode"] == "auto_allow"
+    assert payload["reason"] == "default_mode"
 
 
 def test_audit_event_is_deterministic_and_wrapper_owned() -> None:

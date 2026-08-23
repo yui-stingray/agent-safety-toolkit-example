@@ -650,6 +650,25 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "agent-guard.public_agent_policy_audit_event.v1" in readme
 
 
+def test_temporary_toolkit_policy_boundary_is_documented() -> None:
+    wrapper = (ROOT / "scripts" / "policy_admit.py").read_text(encoding="utf-8")
+    documents = (
+        (ROOT / "README.md").read_text(encoding="utf-8"),
+        ADOPTION_RECIPE.read_text(encoding="utf-8"),
+    )
+
+    assert "TOOLKIT_CAPABILITIES" in wrapper
+    assert "validate_toolkit_policy(policy)" in wrapper
+    for document in documents:
+        normalized = " ".join(document.split())
+        assert "generically extensible" in normalized
+        assert "generic overlap, context, and brace validation fixes" in normalized
+        assert "0.1.12.dev0" in normalized
+        assert "unreleased" in normalized
+        assert "explicit approval of a published release" in normalized
+        assert "default_mode" in normalized
+
+
 def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     recipe = ADOPTION_RECIPE.read_text(encoding="utf-8")
@@ -707,6 +726,12 @@ def test_v2_audit_event_content_binding_is_documented() -> None:
         assert "agent-guard.evidence_pack_manifest.v2" in normalized_document or "report and evidence-pack manifest v2" in normalized_document
         assert AUDIT_EVENT_PROFILE in normalized_document
         assert "substitution" in normalized_document
+        assert "authenticates supplied event content and profile" in normalized_document
+        assert "does not prove the supplied event location" in normalized_document
+        assert "do not claim wrong-path failure closure yet" in normalized_document
+        assert "`--repo-root` location proof" in normalized_document
+        assert "wrong profile or path" not in normalized_document
+        assert "agent-guard report --repo-root" not in normalized_document
         assert "0.3.4 v1" not in normalized_document
         assert "does not bind or verify event content identity" not in normalized_document
 

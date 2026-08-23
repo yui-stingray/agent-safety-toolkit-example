@@ -78,6 +78,21 @@ generic `agent-policy.audit_event.v1.1` JSON schema, but this demo intentionally
 keeps its stricter public-artifact profile. The generic schema does not replace
 the demo's raw repo identifier, local path, or secret-shaped value checks.
 
+### Toolkit Policy Preflight
+
+The pinned `yui-agent-policy` 0.1.11 package remains generically extensible,
+but lacks the generic overlap, context, and brace validation fixes. Before
+calling `evaluate()`, this toolkit wrapper applies only its fixed policy
+preflight. It accepts the intentional names in the current policy matrix plus
+every `ACTION_CAPABILITIES` value, rejects unknown keys such as `wirte`, and
+rejects differing modes for the same repo and capability when ownership scopes
+overlap. Identical duplicates and disjoint `internal`/`external` rules remain
+valid. An allowed capability may be omitted so `default_mode` can apply.
+
+The source `agent-policy` version `0.1.12.dev0` is unreleased. This wrapper is
+not a generic replacement for those pending fixes; dependency pins and hashes
+remain at 0.1.11 until explicit approval of a published release.
+
 ## Local Verification
 
 This demo's checked-in lock targets CPython 3.12 on GitHub-hosted Ubuntu Linux
@@ -239,10 +254,14 @@ in the static bundle directory.
 `agent-guard.evidence_pack_manifest.v2` when the producer receives the same
 repository-relative event path and the recognized
 `agent-guard.public_agent_policy_audit_event.v1` profile. The manifest records
-canonical JSON SHA-256 binding metadata, not the raw event body. Both the
-example and packaged consumers receive that same path and profile, then reject
-event substitution, missing or extra events, invalid paths, and profile
-mismatches.
+canonical JSON SHA-256 binding metadata, not the raw event body. At the pinned
+0.3.5 release, the v2 binding authenticates supplied event content and profile,
+but does not prove the supplied event location. Both consumers reject content
+substitution, wrong profiles, report/manifest mismatches, and missing, extra,
+or count-mismatched evidence; do not claim wrong-path failure closure yet. A
+future published `agent-guard` release must be explicitly pinned before this
+demo migrates to its `--repo-root` location proof. This toolkit neither adds
+that unsupported argument nor duplicates guard validation.
 
 The `yui-agent-policy` generic `agent-policy.audit_event.v1.1` JSON schema is
 separate from the profile accepted by `agent-guard` 0.3.5. This demo keeps its
