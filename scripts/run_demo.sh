@@ -31,6 +31,29 @@ if ! command -v timeout >/dev/null 2>&1; then
   exit 1
 fi
 
+if [ -z "${AGENT_SAFETY_EVIDENCE_STAGE_CONTAINER:-}" ] \
+  && [ -z "${AGENT_SAFETY_EVIDENCE_STAGE_NONCE:-}" ] \
+  && [ -z "${AGENT_SAFETY_EVIDENCE_GATE_FD:-}" ]; then
+  AGENT_SAFETY_EVIDENCE_PYTHON="$PYTHON_BIN" \
+    exec "$PYTHON_BIN" scripts/evidence_publication.py run --repo "$ROOT"
+fi
+
+if [ -z "${AGENT_SAFETY_EVIDENCE_STAGE_CONTAINER:-}" ] \
+  || [ -z "${AGENT_SAFETY_EVIDENCE_STAGE_NONCE:-}" ] \
+  || [ -z "${AGENT_SAFETY_EVIDENCE_GATE_FD:-}" ] \
+  || ! "$PYTHON_BIN" scripts/evidence_publication.py verify-stage \
+    --repo "$ROOT" \
+    --container "$AGENT_SAFETY_EVIDENCE_STAGE_CONTAINER" \
+    --nonce "$AGENT_SAFETY_EVIDENCE_STAGE_NONCE" \
+    2>/dev/null
+then
+  echo "Evidence staging authorization failed." >&2
+  exit 1
+fi
+unset AGENT_SAFETY_EVIDENCE_STAGE_CONTAINER
+unset AGENT_SAFETY_EVIDENCE_STAGE_NONCE
+unset AGENT_SAFETY_EVIDENCE_GATE_FD
+
 CONTENT_TARGETS=(
   AGENTS.md
   README.md

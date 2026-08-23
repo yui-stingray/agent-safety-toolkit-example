@@ -29,6 +29,7 @@ Start with these files:
 - `examples/evidence_consumer.py`
 - `scripts/policy_event_contract.py`
 - `scripts/policy_admit.py`
+- `scripts/evidence_publication.py`
 - `scripts/run_agent_guard_bounded.sh`
 - `scripts/validate_policy_event.py`
 - `scripts/run_demo.sh`
@@ -78,8 +79,8 @@ python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
 python -m pytest -q
 bash scripts/run_demo.sh
 python scripts/validate_policy_event.py .agent-policy/evidence/policy-admission-event.json
-python examples/evidence_consumer.py --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 .agent-guard/evidence/agent-guard-report.json
-python -m agent_guard.consumer --evidence-dir .agent-guard/evidence --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 .agent-guard/evidence/agent-guard-report.json
+python scripts/evidence_publication.py consume --repo . --consumer example
+python scripts/evidence_publication.py consume --repo . --consumer packaged
 ```
 
 If dependency hashes do not match on the target platform, regenerate the lock
@@ -93,11 +94,62 @@ expressions. The demo retains a 12-second external supervisor around context
 check, context inventory, surface inventory, context lock, and report as
 defense in depth; review context-policy changes before execution.
 
-The runner restores its snapshot after ordinary catchable failures, but
-publication across `.agent-guard` and `.agent-policy` is not an atomic
-transaction. `SIGKILL`, host power loss, and concurrent readers are outside the
-guarantee. Run it in an isolated checkout with one writer and consume or publish
-the evidence set only after a successful exit.
+`bash scripts/run_demo.sh` is the documented end-to-end publisher. It invokes
+`scripts/evidence_publication.py run --repo .`, the internal publishing path
+that also mutates the three fixed evidence paths. The internal publisher
+generates and validates a complete candidate in sibling staging, then publishes
+under an advisory writer lock with a durable rollback journal. The commit
+decision is linearized while SIGINT and SIGTERM are blocked immediately before
+journal removal and directory sync. A request observed before that decision
+rolls back; one delivered after it may return an interrupted status with the
+new complete bundle committed. The next runner or snapshot consumer
+automatically rolls back an earlier interrupted transaction.
+
+Use the two `evidence_publication.py consume` commands above in a writable
+cooperating checkout. `consume` takes a nonblocking publication lock and fails
+fast while a writer or another snapshot consumer owns it, so callers retry
+after the lock owner exits. After acquiring the lock, it recovers any pending
+transaction and copies report, manifest, and event into one private snapshot
+before validation.
+
+For an immutable or read-only bundle, direct validation is appropriate only
+when no publisher can mutate the bundle concurrently. Validate it with both
+consumers using the report positional argument and the existing
+`--evidence-dir`, `--agent-policy-audit-event`, and
+`--agent-policy-audit-event-profile` arguments:
+
+```bash
+python examples/evidence_consumer.py \
+  --evidence-dir .agent-guard/evidence \
+  --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json \
+  --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 \
+  .agent-guard/evidence/agent-guard-report.json
+python -m agent_guard.consumer \
+  --evidence-dir .agent-guard/evidence \
+  --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json \
+  --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 \
+  .agent-guard/evidence/agent-guard-report.json
+```
+
+The three fixed files are still not one portable atomic filesystem object.
+Direct readers that bypass the helper can observe a transient mixed set and
+must not treat raw reads as completed publication. Crash-consistency is tested
+only for the documented Ubuntu Linux local-filesystem target and relies on its
+`flock`, `fsync`, and atomic rename semantics. Safe staged-process cleanup also
+requires Linux `/proc` and the `pidfd_open` and `pidfd_send_signal` system
+calls. No equivalent durability or process-cleanup guarantee is claimed for
+NFS, Windows, macOS, container volumes, older kernels without pidfds, or
+storage that does not honor those filesystem semantics.
+Stale-stage recovery signals a recorded child session only when it can pin the
+matching leader identity. If the leader has disappeared while executable
+members remain, the helper preserves the stage and fails closed instead of
+trusting a reusable numeric session ID; retry after those processes exit or
+inspect the local state before removing it.
+The staging helper supports ordinary repositories and linked Git worktrees. It
+rejects Git submodules; adapt and test the snapshot protocol before adopting it
+in a repository that uses submodules.
+Its advisory lock coordinates cooperating helper processes, not a hostile
+same-user process that ignores the lock or directly modifies repository files.
 
 ## Bound Audit Events
 

@@ -12,10 +12,10 @@ python -m pytest -q
 bash scripts/run_demo.sh
 ```
 
-If you intentionally change `AGENTS.md`, `README.md`,
-`scripts/policy_event_contract.py`, `scripts/policy_admit.py`,
-`scripts/validate_policy_event.py`, or `.agent-policy/policy.toml`, refresh the
-digest policy and verify context lock coverage:
+If you intentionally change any path in the canonical `PINNED_FILES` list in
+`scripts/update_digests.py`, refresh the digest policy and verify context lock
+coverage. That list includes the runner and publisher, bounded guard wrapper,
+policy event scripts, policy matrix, MCP policy, and workflow policy.
 
 ```bash
 python scripts/update_digests.py

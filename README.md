@@ -90,6 +90,8 @@ python3.12 -m venv .venv
 python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
 python -m pytest -q
 bash scripts/run_demo.sh
+python scripts/evidence_publication.py consume --repo . --consumer example
+python scripts/evidence_publication.py consume --repo . --consumer packaged
 ```
 
 `scripts/run_demo.sh` rejects non-3.12 interpreters. Set `PYTHON` to an
@@ -132,13 +134,16 @@ agent-guard surface inventory --root . --context-policy .agent-guard/context-pol
 agent-guard mcp check --root . --policy .agent-guard/mcp-policy.yaml --json
 agent-guard workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
 agent-guard drift check --root . --profile recommended --schema-version v2 --json
-agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 --format json --output .agent-guard/evidence/agent-guard-report.json
+agent-guard report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 --format json
 unset -f agent-guard
 ```
 
 The temporary `agent-guard` shell function above routes every displayed command
 through the bounded wrapper; it does not invoke the installed executable
-directly.
+directly. This standalone report command writes only to stdout for inspection.
+`bash scripts/run_demo.sh` is the documented end-to-end publisher; it invokes
+`scripts/evidence_publication.py run --repo .`, the internal publishing path
+that also mutates the three fixed evidence paths.
 
 Treat the individual per-scanner `--json` outputs above as local inspection or
 CI-internal diagnostics. The public handoff is the sanitized report and
@@ -164,15 +169,64 @@ The fixed public `agent-guard` bundle under `.agent-guard/evidence/` contains:
   including the report and the matching `agent-policy` audit-event content
   binding.
 
-The runner snapshots the previous complete evidence set, generates and
-validates its replacement with the installed `agent-guard` consumer, and
-restores the snapshot after ordinary catchable failures.
+The internal publisher takes an advisory writer lock, snapshots the non-ignored
+working tree into sibling staging, and generates and validates the complete
+replacement there before touching the fixed public paths. Publication uses a
+durable rollback journal and same-filesystem atomic replacement for each file
+in report, manifest, then event order. Removing and syncing the journal is the
+commit operation. Its decision is linearized while SIGINT and SIGTERM are
+blocked immediately before journal removal: a request observed before that
+decision rolls back, while one delivered after it may return an interrupted
+status with the new complete bundle committed. Before that decision, an
+interrupted transaction is rolled back by the next runner or snapshot consumer
+without consuming its backup.
 It refuses to replace a bundle directory containing unexpected entries, so
 unrelated local evidence is not deleted implicitly.
-Publication spans `.agent-guard` and `.agent-policy` and is not an atomic
-multi-file transaction. `SIGKILL`, host power loss, and concurrent readers are
-outside this guarantee; run the demo in an isolated checkout with one writer,
-and publish or consume the resulting set only after the command succeeds.
+Use `scripts/evidence_publication.py consume` in a writable cooperating
+checkout: it takes a nonblocking publication lock and fails fast while a writer
+or another snapshot consumer owns it, so callers retry after the lock owner
+exits. After acquiring the lock, it recovers any pending transaction and copies
+all three files into one private snapshot before invoking the selected consumer.
+
+For an immutable or read-only bundle, direct validation is appropriate only
+when no publisher can mutate the bundle concurrently. Validate it with both
+consumers using the report positional argument and the existing
+`--evidence-dir`, `--agent-policy-audit-event`, and
+`--agent-policy-audit-event-profile` arguments:
+
+```bash
+python examples/evidence_consumer.py \
+  --evidence-dir .agent-guard/evidence \
+  --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json \
+  --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 \
+  .agent-guard/evidence/agent-guard-report.json
+python -m agent_guard.consumer \
+  --evidence-dir .agent-guard/evidence \
+  --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json \
+  --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 \
+  .agent-guard/evidence/agent-guard-report.json
+```
+
+The three fixed files still cannot be replaced in one portable filesystem
+operation, so an uncoordinated process that reads the paths directly can
+observe a transient mixed set; it must not treat raw reads as a completed
+publication. The protocol is tested on the documented Ubuntu Linux
+local-filesystem target. Publication durability relies on `flock`, `fsync`,
+and atomic rename semantics; staged-process cleanup additionally requires
+Linux `/proc` and the `pidfd_open` and `pidfd_send_signal` system calls. It
+does not claim equivalent crash durability or process cleanup for NFS,
+Windows, macOS, container volumes, older kernels without pidfds, or storage
+that does not honor those filesystem semantics.
+Stale-stage recovery signals a recorded child session only while it can pin
+the matching leader identity. If that leader has disappeared while executable
+session members remain, the helper preserves the stage and fails closed rather
+than trusting a reusable numeric session ID; retry after those processes exit
+or inspect that local state before removing it.
+The staging snapshot supports ordinary repositories and linked Git worktrees,
+but rejects Git submodules rather than silently producing a partial snapshot.
+The advisory lock coordinates this helper's writers and readers; it is not an
+authorization boundary against another same-user process that ignores the lock
+or mutates repository filenames directly.
 The standalone surface inventory command remains a local/CI check; this demo
 uses the identical section embedded in the report as the public handoff.
 The manifest binds the separately stored, sanitized runtime admission event so
@@ -201,6 +255,8 @@ The digest policy pins files that define the public demo contract:
 
 - `AGENTS.md`
 - `README.md`
+- `scripts/run_demo.sh`
+- `scripts/evidence_publication.py`
 - `scripts/run_agent_guard_bounded.sh`
 - `scripts/policy_event_contract.py`
 - `scripts/policy_admit.py`
@@ -215,7 +271,7 @@ After an intentional change to one of those files:
 python3 scripts/update_digests.py
 agent-guard digest check --root . --policy .agent-guard/context-digest-policy.yaml
 bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli context lock --root . --policy .agent-guard/context-policy.yaml --check --digest-policy .agent-guard/context-digest-policy.yaml --json
-bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli report --root . --context-policy .agent-guard/context-policy.yaml --evidence-preset recommended --api-policy .agent-guard/api-policy.yaml --mcp-policy .agent-guard/mcp-policy.yaml --digest-policy .agent-guard/context-digest-policy.yaml --agent-policy-audit-event .agent-policy/evidence/policy-admission-event.json --agent-policy-audit-event-profile agent-guard.public_agent_policy_audit_event.v1 --format json --output .agent-guard/evidence/agent-guard-report.json
+bash scripts/run_demo.sh
 ```
 
 ## Public Safety Scope
