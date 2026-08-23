@@ -326,10 +326,11 @@ def run_consumers(
     report_path: Path,
     audit_event_paths: tuple[Path, ...] = (AUDIT_EVENT,),
     audit_event_profile: str = AUDIT_EVENT_PROFILE,
+    repo_root: Path = ROOT,
     cwd: Path = ROOT,
     env: dict[str, str] | None = None,
 ) -> list[subprocess.CompletedProcess[str]]:
-    args: list[str] = []
+    args: list[str] = ["--repo-root", str(repo_root)]
     if evidence_dir is not None:
         args.extend(["--evidence-dir", str(evidence_dir)])
     for audit_event_path in audit_event_paths:
@@ -626,13 +627,13 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "--output .agent-guard/evidence/agent-guard-report.json" not in readme
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
-        "yui-agent-guard==0.3.5 \\\n"
-        "    --hash=sha256:5375d0b23d944a799b57a068c4362cc17218951a93b8741be360825655138ab4"
+        "yui-agent-guard==0.3.6 \\\n"
+        "    --hash=sha256:dfc9d637ae1b7dc3c80be191fd290e8ec30d5a5b2c7a978b8e809cda52ac4ac0"
         in requirements
     )
     assert (
-        "yui-agent-policy==0.1.11 \\\n"
-        "    --hash=sha256:5518d3522785242203c1ef22e91cb84db80bd6735dbdff33b20c5cc1ed4cd706"
+        "yui-agent-policy==0.1.12 \\\n"
+        "    --hash=sha256:64eebf71520affca16a7173cb9619de636fa8b1d24a0ab638b99a41d89a24fdf"
         in requirements
     )
     assert requirements.startswith(
@@ -650,7 +651,7 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "agent-guard.public_agent_policy_audit_event.v1" in readme
 
 
-def test_temporary_toolkit_policy_boundary_is_documented() -> None:
+def test_toolkit_policy_integration_boundary_is_documented() -> None:
     wrapper = (ROOT / "scripts" / "policy_admit.py").read_text(encoding="utf-8")
     documents = (
         (ROOT / "README.md").read_text(encoding="utf-8"),
@@ -661,11 +662,11 @@ def test_temporary_toolkit_policy_boundary_is_documented() -> None:
     assert "validate_toolkit_policy(policy)" in wrapper
     for document in documents:
         normalized = " ".join(document.split())
-        assert "generically extensible" in normalized
-        assert "generic overlap, context, and brace validation fixes" in normalized
-        assert "0.1.12.dev0" in normalized
-        assert "unreleased" in normalized
-        assert "explicit approval of a published release" in normalized
+        assert "0.1.12 includes the generic overlap, context, and brace validation fixes" in normalized
+        assert "fixed-vocabulary preflight" in normalized
+        assert "integration boundary" in normalized
+        assert "0.1.12.dev0" not in normalized
+        assert "0.1.11" not in normalized
         assert "default_mode" in normalized
 
 
@@ -681,7 +682,7 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
         assert "CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64" in normalized
         assert "GNU `timeout`" in normalized
         assert "12-second external supervisor" in normalized
-        assert "0.3.5 independently bounds context scans" in normalized
+        assert "0.3.6 independently bounds context scans" in normalized
         assert "defense in depth" in normalized
         assert "not a fixed `agent-guard` release" not in normalized
         assert "durable rollback journal" in normalized
@@ -726,11 +727,12 @@ def test_v2_audit_event_content_binding_is_documented() -> None:
         assert "agent-guard.evidence_pack_manifest.v2" in normalized_document or "report and evidence-pack manifest v2" in normalized_document
         assert AUDIT_EVENT_PROFILE in normalized_document
         assert "substitution" in normalized_document
-        assert "authenticates supplied event content and profile" in normalized_document
-        assert "does not prove the supplied event location" in normalized_document
-        assert "do not claim wrong-path failure closure yet" in normalized_document
-        assert "`--repo-root` location proof" in normalized_document
-        assert "wrong profile or path" not in normalized_document
+        assert "verify supplied event content and profile" in normalized_document
+        assert "verify the canonical repository-relative event location" in normalized_document
+        assert "wrong event locations" in normalized_document
+        assert "`--repo-root .`" in normalized_document
+        assert "does not prove the supplied event location" not in normalized_document
+        assert "do not claim wrong-path failure closure yet" not in normalized_document
         assert "agent-guard report --repo-root" not in normalized_document
         assert "0.3.4 v1" not in normalized_document
         assert "does not bind or verify event content identity" not in normalized_document
@@ -808,6 +810,7 @@ def test_direct_consumers_validate_an_immutable_bundle_without_state(
             / "evidence"
             / "agent-guard-report.json",
             audit_event_paths=(repo / AUDIT_EVENT_RELATIVE_PATH,),
+            repo_root=repo,
             cwd=repo,
             env=demo_environment(temp_dir=runtime),
         )
@@ -2483,6 +2486,7 @@ def test_evidence_consumer_accepts_recommended_report(tmp_path: Path) -> None:
         evidence_dir=repo / ".agent-guard" / "evidence",
         report_path=repo / ".agent-guard" / "evidence" / "agent-guard-report.json",
         audit_event_paths=(repo / AUDIT_EVENT_RELATIVE_PATH,),
+        repo_root=repo,
         cwd=repo,
     )
 
@@ -2554,7 +2558,9 @@ def test_v2_evidence_consumers_fail_closed_for_bound_event_errors(
 ) -> None:
     evidence_dir = tmp_path / "evidence"
     shutil.copytree(EVIDENCE_DIR, evidence_dir)
-    event = tmp_path / "policy-admission-event.json"
+    repo_root = tmp_path / "repo"
+    event = repo_root / AUDIT_EVENT_RELATIVE_PATH
+    event.parent.mkdir(parents=True)
     shutil.copy2(AUDIT_EVENT, event)
     audit_event_paths: tuple[Path, ...] = (event,)
     audit_event_profile = AUDIT_EVENT_PROFILE
@@ -2569,7 +2575,9 @@ def test_v2_evidence_consumers_fail_closed_for_bound_event_errors(
     elif case == "extra_event":
         audit_event_paths = (event, event)
     elif case == "wrong_event_path":
-        audit_event_paths = (tmp_path / "missing-event.json",)
+        wrong_event = repo_root / ".agent-policy" / "evidence" / "wrong-event.json"
+        shutil.copy2(AUDIT_EVENT, wrong_event)
+        audit_event_paths = (wrong_event,)
     elif case == "wrong_event_profile":
         audit_event_profile = "agent-policy.audit_event.v1.1"
     else:
@@ -2580,6 +2588,7 @@ def test_v2_evidence_consumers_fail_closed_for_bound_event_errors(
         report_path=evidence_dir / "agent-guard-report.json",
         audit_event_paths=audit_event_paths,
         audit_event_profile=audit_event_profile,
+        repo_root=repo_root,
     )
 
     assert results[0].returncode == results[1].returncode == 1
