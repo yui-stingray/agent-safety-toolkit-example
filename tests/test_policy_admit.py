@@ -43,6 +43,20 @@ def write_json(path: Path, payload: dict[str, object]) -> Path:
     return path
 
 
+def public_audit_event(path: str) -> dict[str, object]:
+    return {
+        "capability": "read",
+        "context": {"ownership_class": "internal"},
+        "decision": {
+            "matched_repo": "agent-safety-toolkit-example-public",
+            "mode": "auto_allow",
+            "reason": "repo_policy",
+        },
+        "path": path,
+        "repo": "agent-safety-toolkit-example-public",
+    }
+
+
 def test_malformed_invocation_returns_exit_one_without_echoing_input() -> None:
     marker = "untrusted-action-marker"
     result = subprocess.run(
@@ -343,6 +357,16 @@ def test_public_audit_event_validator_accepts_alias_event(tmp_path: Path) -> Non
     assert result.returncode == 0, result.stderr
     validator_payload = json.loads(result.stdout)
     assert validator_payload == {"schema_version": "agent-policy.audit-event.public.v1", "status": "ok"}
+
+
+def test_shared_public_audit_contract_accepts_canonical_repo_path() -> None:
+    validate_public_audit_event(public_audit_event("docs/adoption-recipe.md"))
+
+
+@pytest.mark.parametrize("path", ("docs//adoption-recipe.md", "docs/./adoption-recipe.md", "docs/"))
+def test_shared_public_audit_contract_rejects_noncanonical_repo_path(path: str) -> None:
+    with pytest.raises(ValueError, match="path must be a normalized repository-relative public path"):
+        validate_public_audit_event(public_audit_event(path))
 
 
 def test_module_execution_uses_repo_contract_instead_of_cwd_shadow(tmp_path: Path) -> None:

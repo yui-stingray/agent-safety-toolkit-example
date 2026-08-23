@@ -17,7 +17,7 @@ checks:
     sha256: ba88822fd108b98d87767310210a8f117dbdd929965216d2dfade8bffd467b45
   - id: policy_event_contract
     path: scripts/policy_event_contract.py
-    sha256: 830d3137d8c18fdd486a4e77cad7fd8fd0cc14e57c8bac7136a881334856f74a
+    sha256: 54470407c75807b70974793890a91c5ce8c6504a9640f847395914971042b3c8
   - id: policy_wrapper
     path: scripts/policy_admit.py
     sha256: 35f7b88cf5838c37391d40ad43793f7308c65252e063301d54a17ec135f81869

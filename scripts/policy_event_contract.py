@@ -49,7 +49,9 @@ def validate_public_audit_event(payload: Any) -> None:
     if "session_id" in payload:
         validate_public_label(payload["session_id"], field="session_id")
     if "path" in payload:
-        normalize_public_repo_path(payload["path"])
+        path = payload["path"]
+        if normalize_public_repo_path(path) != path:
+            raise ValueError("path must be a normalized repository-relative public path")
 
 
 def validate_public_label(value: Any, *, field: str) -> str:
