@@ -9,7 +9,14 @@ import sys
 from pathlib import Path
 from typing import Final, NoReturn
 
-from agent_policy import PolicyDecision, audit_event_to_json, build_audit_event, evaluate, load_policy_file
+from agent_policy import (
+    PolicyDecision,
+    PolicyMatrix,
+    audit_event_to_json,
+    build_audit_event,
+    evaluate,
+    load_policy_file,
+)
 
 if __package__:
     from .policy_event_contract import (
@@ -28,6 +35,21 @@ else:
 
 DEFAULT_REPO: Final = "yui-stingray/agent-safety-toolkit-example"
 DEFAULT_POLICY: Final = ".agent-policy/policy.toml"
+POLICY_FAILURE_MESSAGE: Final = "policy evaluation failed"
+
+# agent-policy keeps capability names extensible. This demo's wrapper instead
+# admits only the policy vocabulary it owns, plus normalized demo actions.
+TOOLKIT_CAPABILITIES: Final[frozenset[str]] = frozenset(
+    {
+        "artifact.publish",
+        "commit",
+        "merge.pr",
+        "push",
+        "read",
+        "secret.materialize",
+        "write",
+    }
+) | frozenset(ACTION_CAPABILITIES.values())
 
 EXIT_BY_MODE: Final[dict[str, int]] = {
     "auto_allow": 0,
@@ -78,6 +100,29 @@ def build_context(args: argparse.Namespace) -> dict[str, object]:
     if args.first_write:
         context["first_write_to_repo"] = True
     return context
+
+
+def ownership_scopes_overlap(left: str | None, right: str | None) -> bool:
+    return left is None or right is None or left == right
+
+
+def validate_toolkit_policy(policy: PolicyMatrix) -> None:
+    """Reject policy shapes that this fixed toolkit cannot evaluate safely."""
+
+    seen: dict[tuple[str, str], list[tuple[str | None, str]]] = {}
+    for repo_policy in policy.repo_policy:
+        for capability, mode in repo_policy.capabilities.items():
+            if capability not in TOOLKIT_CAPABILITIES:
+                raise ValueError("unsupported toolkit capability")
+
+            key = (repo_policy.repo, capability)
+            for ownership_class, existing_mode in seen.get(key, []):
+                if (
+                    ownership_scopes_overlap(repo_policy.ownership_class, ownership_class)
+                    and mode != existing_mode
+                ):
+                    raise ValueError("conflicting overlapping policy modes")
+            seen.setdefault(key, []).append((repo_policy.ownership_class, mode))
 
 
 def safe_optional_label(value: str | None, *, field: str) -> str | None:
@@ -135,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         policy = load_policy_file(Path(args.policy))
+        validate_toolkit_policy(policy)
         context = build_context(args)
         decision = evaluate(
             policy,
@@ -146,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         return emit_error(
             action=args.action,
             capability=capability,
-            message="policy evaluation failed",
+            message=POLICY_FAILURE_MESSAGE,
         )
 
     if args.audit_event:

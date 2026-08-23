@@ -5,7 +5,7 @@ checks:
     sha256: 1836da432c9a190aa0d086ec8e45fe7733fdaf0ba592d5f2949849a81346e863
   - id: readme
     path: README.md
-    sha256: e48db88db846c6dc88aa6d0d96c0da5015180f6f9e6301a2d2f62a3b16747d99
+    sha256: b32eba2e399bc6e38712a7bd0b76113c7e6bd161b2d4e27aa9f4f05366bed482
   - id: demo_runner
     path: scripts/run_demo.sh
     sha256: a268feedb9cf8b8976e06a04b56e42a65104a79a30d5251bbfd4d132ec33422a
@@ -20,7 +20,7 @@ checks:
     sha256: 54470407c75807b70974793890a91c5ce8c6504a9640f847395914971042b3c8
   - id: policy_wrapper
     path: scripts/policy_admit.py
-    sha256: 35f7b88cf5838c37391d40ad43793f7308c65252e063301d54a17ec135f81869
+    sha256: e4c802b0b681555f23e1d58313ef8324535f1fe323eb70ae33dc41ab9e18df9a
   - id: policy_event_validator
     path: scripts/validate_policy_event.py
     sha256: 2787c55e0457731903c543e248fe66b570d1f13ff505d442a06eb0b2dd214ad7
