@@ -1983,6 +1983,7 @@ def test_killed_staged_child_leaves_no_unrecoverable_backup(
     tmp_path: Path, kill_parent: bool
 ) -> None:
     repo = copy_demo_repo(tmp_path)
+    recovered: subprocess.CompletedProcess[str] | None = None
     with start_demo(repo, temp_dir=tmp_path, extra_env={}) as writer:
         state = evidence_publication._state_directory(repo)
         deadline = time.monotonic() + 120
@@ -2021,10 +2022,13 @@ def test_killed_staged_child_leaves_no_unrecoverable_backup(
             os.close(pinned.pidfd)
         writer.communicate(timeout=30)
         assert writer.returncode != 0
-        if not kill_parent:
+        if kill_parent:
+            recovered = run_demo(repo, temp_dir=tmp_path)
+        else:
             assert not list(state.glob("stage-*"))
 
-    recovered = run_demo(repo, temp_dir=tmp_path)
+    if recovered is None:
+        recovered = run_demo(repo, temp_dir=tmp_path)
     assert recovered.returncode == 0, recovered.stdout + recovered.stderr
     assert not list(state.glob("stage-*"))
 
