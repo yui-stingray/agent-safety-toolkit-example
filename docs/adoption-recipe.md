@@ -69,11 +69,14 @@ bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli context lock -
 
 ## Toolkit Policy Integration Boundary
 
-`yui-agent-policy` 0.1.13 hardens its Bash example hook against dynamic Git argv
-and aliases, active glob/brace expansion, and `xargs`/`find -exec` argv
-generation. These unresolved forms map to `unknown` and fail closed. The 0.1.12
-generic overlap, context, and brace-validation fixes remain available. This
-demo's wrapper retains a fixed-vocabulary preflight before `evaluate()` as an
+`yui-agent-policy` 0.1.14 retains the 0.1.13 hardening for dynamic Git argv and
+aliases, active glob/brace expansion, and `xargs`/`find -exec` argv generation.
+It additionally makes its bounded Bash example hook fail closed on active
+arithmetic, trap and wait-assignment mutation, startup-sensitive shell state,
+and extra wrapper input after an inspected `-c` body. These unresolved forms
+map to `unknown` and fail closed. The 0.1.12 generic overlap, context, and
+brace-validation fixes remain available. This demo's wrapper retains a
+fixed-vocabulary preflight before `evaluate()` as an
 integration boundary: it permits the intentional current policy names and every
 `ACTION_CAPABILITIES` value, rejects unknown keys such as `wirte`, and rejects
 differing modes where the same repo, capability, and overlapping ownership
@@ -190,6 +193,10 @@ count-mismatched evidence. Do not duplicate guard validation in this recipe.
 The generic
 `agent-policy.audit_event.v1.1` schema is not the profile recognized by
 `agent-guard` 0.3.7; retain this demo's stricter public-artifact event contract.
+Neither event profile records the installed `yui-agent-policy` package version. The
+hash-locked environment plus CI regeneration establish process-level version
+provenance; consumers must not infer a producer version from the standalone
+event or evidence-pack binding.
 
 ## Do Not Copy
 

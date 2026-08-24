@@ -632,8 +632,8 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
         in requirements
     )
     assert (
-        "yui-agent-policy==0.1.13 \\\n"
-        "    --hash=sha256:d43db3d28bfb56367c335facb9765421271d89de6918593aae00ea031c23505d"
+        "yui-agent-policy==0.1.14 \\\n"
+        "    --hash=sha256:d9a84669393501992e7c98ea633043a98e84cc946748a16be8a4ddee7544c012"
         in requirements
     )
     assert requirements.startswith(
@@ -662,8 +662,11 @@ def test_toolkit_policy_integration_boundary_is_documented() -> None:
     assert "validate_toolkit_policy(policy)" in wrapper
     for document in documents:
         normalized = " ".join(document.split())
-        assert "0.1.13 hardens its Bash example hook against dynamic Git argv and aliases" in normalized
+        assert "0.1.14 retains the 0.1.13 hardening for dynamic Git argv and aliases" in normalized
         assert "active glob/brace expansion, and `xargs`/`find -exec` argv generation" in normalized
+        assert "active arithmetic, trap and wait-assignment mutation" in normalized
+        assert "startup-sensitive shell state" in normalized
+        assert "extra wrapper input after an inspected `-c` body" in normalized
         assert "These unresolved forms map to `unknown` and fail closed" in normalized
         assert "0.1.12 generic overlap, context, and brace-validation fixes remain available" in normalized
         assert "fixed-vocabulary preflight" in normalized
@@ -671,6 +674,9 @@ def test_toolkit_policy_integration_boundary_is_documented() -> None:
         assert "0.1.12.dev0" not in normalized
         assert "0.1.11" not in normalized
         assert "default_mode" in normalized
+        assert "Neither event profile records the installed `yui-agent-policy` package version" in normalized
+        assert "hash-locked environment plus CI regeneration establish process-level version provenance" in normalized
+        assert "must not infer a producer version" in normalized
 
 
 def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
