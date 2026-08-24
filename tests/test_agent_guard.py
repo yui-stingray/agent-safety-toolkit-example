@@ -632,8 +632,8 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
         in requirements
     )
     assert (
-        "yui-agent-policy==0.1.14 \\\n"
-        "    --hash=sha256:d9a84669393501992e7c98ea633043a98e84cc946748a16be8a4ddee7544c012"
+        "yui-agent-policy==0.1.15 \\\n"
+        "    --hash=sha256:bdac8b133a3d1be799294feba416ab59d9018398ab2c1c1a7616bfd71c7eaf81"
         in requirements
     )
     assert requirements.startswith(
@@ -662,11 +662,15 @@ def test_toolkit_policy_integration_boundary_is_documented() -> None:
     assert "validate_toolkit_policy(policy)" in wrapper
     for document in documents:
         normalized = " ".join(document.split())
-        assert "0.1.14 retains the 0.1.13 hardening for dynamic Git argv and aliases" in normalized
-        assert "active glob/brace expansion, and `xargs`/`find -exec` argv generation" in normalized
-        assert "active arithmetic, trap and wait-assignment mutation" in normalized
-        assert "startup-sensitive shell state" in normalized
-        assert "extra wrapper input after an inspected `-c` body" in normalized
+        assert "0.1.15 extends the bounded example-hook contract" in normalized
+        assert "callback-bearing and state-mutating builtins" in normalized
+        assert "xtrace/`PS4` execution" in normalized
+        assert "shell and environment assignments" in normalized
+        assert "command-bearing Git environment variables and program options" in normalized
+        assert "path-qualified or unlisted command heads" in normalized
+        assert "dynamic Git argv and aliases, active glob/brace expansion" in normalized
+        assert "active arithmetic, startup-sensitive shell state" in normalized
+        assert "unmodeled shell-wrapper input" in normalized
         assert "These unresolved forms map to `unknown` and fail closed" in normalized
         assert "0.1.12 generic overlap, context, and brace-validation fixes remain available" in normalized
         assert "fixed-vocabulary preflight" in normalized

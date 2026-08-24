@@ -69,13 +69,16 @@ bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli context lock -
 
 ## Toolkit Policy Integration Boundary
 
-`yui-agent-policy` 0.1.14 retains the 0.1.13 hardening for dynamic Git argv and
-aliases, active glob/brace expansion, and `xargs`/`find -exec` argv generation.
-It additionally makes its bounded Bash example hook fail closed on active
-arithmetic, trap and wait-assignment mutation, startup-sensitive shell state,
-and extra wrapper input after an inspected `-c` body. These unresolved forms
-map to `unknown` and fail closed. The 0.1.12 generic overlap, context, and
-brace-validation fixes remain available. This demo's wrapper retains a
+`yui-agent-policy` 0.1.15 extends the bounded example-hook contract by failing
+closed on callback-bearing and state-mutating builtins, xtrace/`PS4` execution,
+shell and environment assignments, command-bearing Git environment variables
+and program options, and path-qualified or unlisted command heads. It retains
+the earlier hardening for dynamic Git argv and aliases, active glob/brace
+expansion, `xargs`/`find -exec` argv generation, active arithmetic,
+startup-sensitive shell state, and unmodeled shell-wrapper input. These
+unresolved forms map to `unknown` and fail closed. The 0.1.12 generic overlap,
+context, and brace-validation fixes remain available. This demo's wrapper
+retains a
 fixed-vocabulary preflight before `evaluate()` as an
 integration boundary: it permits the intentional current policy names and every
 `ACTION_CAPABILITIES` value, rejects unknown keys such as `wirte`, and rejects
