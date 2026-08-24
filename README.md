@@ -80,11 +80,15 @@ the demo's raw repo identifier, local path, or secret-shaped value checks.
 
 ### Toolkit Policy Preflight
 
-`yui-agent-policy` 0.1.15 extends the bounded example-hook contract by failing
-closed on callback-bearing and state-mutating builtins, xtrace/`PS4` execution,
-shell and environment assignments, command-bearing Git environment variables
-and program options, and path-qualified or unlisted command heads. It retains
-the earlier hardening for dynamic Git argv and aliases, active glob/brace
+`yui-agent-policy` 0.1.16 extends the bounded example-hook contract by failing
+closed on active output redirection, ANSI-C quoted words, file-writing command
+heads such as `tee`, and every Git push or send-pack form without an explicit
+visible force option. Explicit visible force forms remain `push.force`; the
+other modeled push and send-pack forms map to `unknown`. It retains the 0.1.15
+hardening for callback-bearing and state-mutating builtins, xtrace/`PS4`
+execution, shell and environment assignments, command-bearing Git environment
+variables and program options, and path-qualified or unlisted command heads,
+and the earlier hardening for dynamic Git argv and aliases, active glob/brace
 expansion, `xargs`/`find -exec` argv generation, active arithmetic,
 startup-sensitive shell state, and unmodeled shell-wrapper input. These
 unresolved forms map to `unknown` and fail closed. The 0.1.12 generic overlap,

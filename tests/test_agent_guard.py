@@ -632,8 +632,8 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
         in requirements
     )
     assert (
-        "yui-agent-policy==0.1.15 \\\n"
-        "    --hash=sha256:bdac8b133a3d1be799294feba416ab59d9018398ab2c1c1a7616bfd71c7eaf81"
+        "yui-agent-policy==0.1.16 \\\n"
+        "    --hash=sha256:5f41b62fc8fc113470c84e2b6b92689aeb03046323674d52b010d46991010098"
         in requirements
     )
     assert requirements.startswith(
@@ -662,7 +662,13 @@ def test_toolkit_policy_integration_boundary_is_documented() -> None:
     assert "validate_toolkit_policy(policy)" in wrapper
     for document in documents:
         normalized = " ".join(document.split())
-        assert "0.1.15 extends the bounded example-hook contract" in normalized
+        assert "0.1.16 extends the bounded example-hook contract" in normalized
+        assert "active output redirection" in normalized
+        assert "ANSI-C quoted words" in normalized
+        assert "file-writing command heads such as `tee`" in normalized
+        assert "every Git push or send-pack form" in normalized
+        assert "other modeled push and send-pack forms map to `unknown`" in normalized
+        assert "0.1.15 hardening" in normalized
         assert "callback-bearing and state-mutating builtins" in normalized
         assert "xtrace/`PS4` execution" in normalized
         assert "shell and environment assignments" in normalized
