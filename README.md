@@ -80,11 +80,14 @@ the demo's raw repo identifier, local path, or secret-shaped value checks.
 
 ### Toolkit Policy Preflight
 
-`yui-agent-policy` 0.1.13 hardens its Bash example hook against dynamic Git argv
-and aliases, active glob/brace expansion, and `xargs`/`find -exec` argv
-generation. These unresolved forms map to `unknown` and fail closed. The 0.1.12
-generic overlap, context, and brace-validation fixes remain available. Before
-calling `evaluate()`, this toolkit retains a
+`yui-agent-policy` 0.1.14 retains the 0.1.13 hardening for dynamic Git argv and
+aliases, active glob/brace expansion, and `xargs`/`find -exec` argv generation.
+It additionally makes its bounded Bash example hook fail closed on active
+arithmetic, trap and wait-assignment mutation, startup-sensitive shell state,
+and extra wrapper input after an inspected `-c` body. These unresolved forms
+map to `unknown` and fail closed. The 0.1.12 generic overlap, context, and
+brace-validation fixes remain available. Before calling `evaluate()`, this
+toolkit retains a
 fixed-vocabulary preflight as an integration boundary. It accepts the
 intentional names in the current policy matrix plus every `ACTION_CAPABILITIES`
 value, rejects unknown keys such as `wirte`, and rejects differing modes for
@@ -270,6 +273,11 @@ The `yui-agent-policy` generic `agent-policy.audit_event.v1.1` JSON schema is
 separate from the profile accepted by `agent-guard` 0.3.7. This demo keeps its
 stricter public-artifact event contract, including raw repository identifier,
 local path, and secret-shaped value checks.
+
+Neither event profile records the installed `yui-agent-policy` package
+version. The hash-locked environment plus CI regeneration establish
+process-level version provenance; consumers must not infer a producer version
+from the standalone event or evidence-pack binding.
 
 ## Updating Digests
 
