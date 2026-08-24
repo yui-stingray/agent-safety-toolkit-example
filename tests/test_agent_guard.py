@@ -627,13 +627,13 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "--output .agent-guard/evidence/agent-guard-report.json" not in readme
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
-        "yui-agent-guard==0.3.6 \\\n"
-        "    --hash=sha256:dfc9d637ae1b7dc3c80be191fd290e8ec30d5a5b2c7a978b8e809cda52ac4ac0"
+        "yui-agent-guard==0.3.7 \\\n"
+        "    --hash=sha256:e67a64bf0481c1de85646ff886d5c12c115fb48f736195aa4df4ddb6f8106c4d"
         in requirements
     )
     assert (
-        "yui-agent-policy==0.1.12 \\\n"
-        "    --hash=sha256:64eebf71520affca16a7173cb9619de636fa8b1d24a0ab638b99a41d89a24fdf"
+        "yui-agent-policy==0.1.13 \\\n"
+        "    --hash=sha256:d43db3d28bfb56367c335facb9765421271d89de6918593aae00ea031c23505d"
         in requirements
     )
     assert requirements.startswith(
@@ -662,7 +662,10 @@ def test_toolkit_policy_integration_boundary_is_documented() -> None:
     assert "validate_toolkit_policy(policy)" in wrapper
     for document in documents:
         normalized = " ".join(document.split())
-        assert "0.1.12 includes the generic overlap, context, and brace validation fixes" in normalized
+        assert "0.1.13 hardens its Bash example hook against dynamic Git argv and aliases" in normalized
+        assert "active glob/brace expansion, and `xargs`/`find -exec` argv generation" in normalized
+        assert "These unresolved forms map to `unknown` and fail closed" in normalized
+        assert "0.1.12 generic overlap, context, and brace-validation fixes remain available" in normalized
         assert "fixed-vocabulary preflight" in normalized
         assert "integration boundary" in normalized
         assert "0.1.12.dev0" not in normalized
@@ -682,7 +685,8 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
         assert "CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64" in normalized
         assert "GNU `timeout`" in normalized
         assert "12-second external supervisor" in normalized
-        assert "0.3.6 independently bounds context scans" in normalized
+        assert "0.3.7 retains v2 audit-event path binding and independently bounds context scans" in normalized
+        assert "PyPI long-description self-pin hardening is package/release hygiene, not a new runtime scanner" in normalized
         assert "defense in depth" in normalized
         assert "not a fixed `agent-guard` release" not in normalized
         assert "durable rollback journal" in normalized

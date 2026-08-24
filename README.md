@@ -73,15 +73,18 @@ fallback.
 `scripts/validate_policy_event.py` validates the committed public audit-event
 artifact and rejects raw repository identifiers, local paths, unsupported
 fields, and secret-shaped values before `agent-guard` references it.
-The `yui-agent-policy` 0.1.12 release also includes an opt-in
+The earlier `yui-agent-policy` 0.1.12 release introduced an opt-in
 generic `agent-policy.audit_event.v1.1` JSON schema, but this demo intentionally
 keeps its stricter public-artifact profile. The generic schema does not replace
 the demo's raw repo identifier, local path, or secret-shaped value checks.
 
 ### Toolkit Policy Preflight
 
-`yui-agent-policy` 0.1.12 includes the generic overlap, context, and brace
-validation fixes. Before calling `evaluate()`, this toolkit retains a
+`yui-agent-policy` 0.1.13 hardens its Bash example hook against dynamic Git argv
+and aliases, active glob/brace expansion, and `xargs`/`find -exec` argv
+generation. These unresolved forms map to `unknown` and fail closed. The 0.1.12
+generic overlap, context, and brace-validation fixes remain available. Before
+calling `evaluate()`, this toolkit retains a
 fixed-vocabulary preflight as an integration boundary. It accepts the
 intentional names in the current policy matrix plus every `ACTION_CAPABILITIES`
 value, rejects unknown keys such as `wirte`, and rejects differing modes for
@@ -108,12 +111,14 @@ python scripts/evidence_publication.py consume --repo . --consumer packaged
 
 `scripts/run_demo.sh` rejects non-3.12 interpreters. Set `PYTHON` to an
 explicit Python 3.12 executable when the activated environment is not first on
-`PATH`. It also requires GNU `timeout`. `agent-guard` 0.3.6 independently
-bounds context scans, including custom context-policy regular expressions. The
-script retains a 12-second external supervisor around context check, context
-inventory, surface inventory, context lock, and report as defense in depth:
-timeout output is discarded and the demo fails closed. Review repository policy
-changes before running the demo.
+`PATH`. It also requires GNU `timeout`. `agent-guard` 0.3.7 retains v2
+audit-event path binding and independently bounds context scans, including
+custom context-policy regular expressions. Its PyPI long-description self-pin
+hardening is package/release hygiene, not a new runtime scanner. The script
+retains a 12-second external supervisor around context check, context inventory,
+surface inventory, context lock, and report as defense in depth: timeout output
+is discarded and the demo fails closed. Review repository policy changes before
+running the demo.
 
 The end-to-end script runs:
 
@@ -249,12 +254,12 @@ in the static bundle directory.
 
 ### Bound Audit Events
 
-`agent-guard` 0.3.6 emits `agent-guard.report_evidence.v2` and
-`agent-guard.evidence_pack_manifest.v2` when the producer receives the same
-repository-relative event path and the recognized
+`agent-guard` 0.3.7 continues to emit `agent-guard.report_evidence.v2` and
+`agent-guard.evidence_pack_manifest.v2`, retaining v2 audit-event path binding
+when the producer receives the same repository-relative event path and the recognized
 `agent-guard.public_agent_policy_audit_event.v1` profile. The manifest records
 canonical JSON SHA-256 binding metadata, not the raw event body. Pass that path
-and profile to both consumers with `--repo-root .`. At 0.3.6, v2 consumers
+and profile to both consumers with `--repo-root .`. At 0.3.7, v2 consumers
 verify supplied event content and profile; when given `--repo-root`, they also
 verify the canonical repository-relative event location. Both consumers reject
 substitution, wrong profiles, wrong event locations when given `--repo-root`,
@@ -262,7 +267,7 @@ report/manifest mismatches, and missing, extra, or count-mismatched evidence.
 This toolkit does not duplicate guard validation.
 
 The `yui-agent-policy` generic `agent-policy.audit_event.v1.1` JSON schema is
-separate from the profile accepted by `agent-guard` 0.3.6. This demo keeps its
+separate from the profile accepted by `agent-guard` 0.3.7. This demo keeps its
 stricter public-artifact event contract, including raw repository identifier,
 local path, and secret-shaped value checks.
 
