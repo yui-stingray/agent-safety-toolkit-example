@@ -23,7 +23,7 @@ typing-extensions==4.15.0 \
     --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548
 typing-inspection==0.4.2 \
     --hash=sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7
-yui-agent-guard==0.3.6 \
-    --hash=sha256:dfc9d637ae1b7dc3c80be191fd290e8ec30d5a5b2c7a978b8e809cda52ac4ac0
-yui-agent-policy==0.1.12 \
-    --hash=sha256:64eebf71520affca16a7173cb9619de636fa8b1d24a0ab638b99a41d89a24fdf
+yui-agent-guard==0.3.7 \
+    --hash=sha256:e67a64bf0481c1de85646ff886d5c12c115fb48f736195aa4df4ddb6f8106c4d
+yui-agent-policy==0.1.13 \
+    --hash=sha256:d43db3d28bfb56367c335facb9765421271d89de6918593aae00ea031c23505d
