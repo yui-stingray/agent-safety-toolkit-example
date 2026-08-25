@@ -5,7 +5,7 @@ checks:
     sha256: 1836da432c9a190aa0d086ec8e45fe7733fdaf0ba592d5f2949849a81346e863
   - id: readme
     path: README.md
-    sha256: 7937320da611edb58842c41c52742c8fc6bbb328d494cc43ed67ba73d4e22b28
+    sha256: 65204c51ef4f70c658979fdb7346c8d4f43cb42ae8b36106dcc19771e846d96f
   - id: demo_runner
     path: scripts/run_demo.sh
     sha256: b7e7fdd226de8084844d09723b160f8a813da7cd08c9f0511dedf7813567a2fb
