@@ -23,7 +23,7 @@ then
 fi
 
 if ! command -v timeout >/dev/null 2>&1; then
-  echo "A timeout supervisor is required for the agent-guard 0.3.7 defense-in-depth context checks." >&2
+  echo "A timeout supervisor is required for the agent-guard 0.3.7 defense-in-depth static checks." >&2
   exit 1
 fi
 
@@ -31,7 +31,7 @@ if [ "${1:-}" != "python" ] \
   || [ "${2:-}" != "-m" ] \
   || [ "${3:-}" != "agent_guard.cli" ]
 then
-  echo "agent-guard bounded context execution failed" >&2
+  echo "agent-guard bounded execution failed" >&2
   exit 1
 fi
 shift 3
@@ -43,7 +43,7 @@ trap 'rm -f -- "$stdout_path" "$stderr_path"' EXIT
 if ! stdout_path="$(mktemp "${TMPDIR:-/tmp}/agent-guard-bounded-stdout.XXXXXX" 2>/dev/null)" \
   || ! stderr_path="$(mktemp "${TMPDIR:-/tmp}/agent-guard-bounded-stderr.XXXXXX" 2>/dev/null)"
 then
-  echo "agent-guard bounded context execution failed" >&2
+  echo "agent-guard bounded execution failed" >&2
   exit 1
 fi
 
@@ -57,11 +57,11 @@ status="$?"
 set -e
 
 if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
-  echo "agent-guard context evaluation exceeded the external execution budget" >&2
+  echo "agent-guard execution exceeded the external execution budget" >&2
   exit 1
 fi
 if [ "$status" -ge 125 ]; then
-  echo "agent-guard bounded context execution failed" >&2
+  echo "agent-guard bounded execution failed" >&2
   exit 1
 fi
 
