@@ -180,6 +180,50 @@ class DemoProcess:
         return self.output.read(), ""
 
 
+def _cleanup_leaderless_test_session(session_id: int) -> None:
+    """Reap test-owned members without relaxing production recovery."""
+    pinned: dict[tuple[int, int], evidence_publication._PinnedProcess] = {}
+    stopped: set[tuple[int, int]] = set()
+    try:
+        while True:
+            for pid in evidence_publication._session_member_pids(session_id):
+                identity = evidence_publication._read_process_identity(pid)
+                if identity is None:
+                    continue
+                key = (identity.pid, identity.start_identity)
+                if key in pinned:
+                    continue
+                candidate = evidence_publication._pin_session_member(pid, session_id)
+                if candidate is not None:
+                    pinned[key] = candidate
+            for key, candidate in pinned.items():
+                if key in stopped:
+                    continue
+                evidence_publication._pidfd_send_signal(
+                    candidate.pidfd, signal.SIGSTOP
+                )
+                stopped.add(key)
+            for candidate in pinned.values():
+                evidence_publication._wait_pinned_stopped(candidate)
+
+            current = {
+                (identity.pid, identity.start_identity)
+                for pid in evidence_publication._session_member_pids(session_id)
+                if (identity := evidence_publication._read_process_identity(pid))
+                is not None
+            }
+            if current <= pinned.keys():
+                break
+
+        for candidate in pinned.values():
+            evidence_publication._pidfd_send_signal(candidate.pidfd, signal.SIGKILL)
+        for candidate in pinned.values():
+            evidence_publication._wait_pinned_quiescent(candidate)
+    finally:
+        for candidate in pinned.values():
+            os.close(candidate.pidfd)
+
+
 @contextmanager
 def start_demo(
     repo: Path,
@@ -220,13 +264,19 @@ def start_demo(
                         and isinstance(child_start, int)
                         and not isinstance(child_start, bool)
                         and child_start > 0
-                        and evidence_publication._read_process_identity(child_pid)
-                        is not None
                     ):
-                        evidence_publication._kill_session_members(
-                            child_pid,
-                            expected_leader_start=child_start,
-                        )
+                        if (
+                            evidence_publication._read_process_identity(child_pid)
+                            is not None
+                        ):
+                            evidence_publication._kill_session_members(
+                                child_pid,
+                                expected_leader_start=child_start,
+                            )
+                        elif evidence_publication._session_executable_member_pids(
+                            child_pid
+                        ):
+                            _cleanup_leaderless_test_session(child_pid)
         finally:
             evidence_publication._kill_process_session(
                 process,
