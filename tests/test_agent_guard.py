@@ -2321,13 +2321,18 @@ def test_killed_staged_child_leaves_no_unrecoverable_backup(
         assert child_start is not None
         if kill_parent:
             writer.kill()
-        pinned = evidence_publication._pin_session_member(child_pid, child_pid)
-        assert pinned is not None
-        assert pinned.identity.start_identity == child_start
-        try:
-            evidence_publication._pidfd_send_signal(pinned.pidfd, signal.SIGKILL)
-        finally:
-            os.close(pinned.pidfd)
+            evidence_publication._kill_session_members(
+                child_pid,
+                expected_leader_start=child_start,
+            )
+        else:
+            pinned = evidence_publication._pin_session_member(child_pid, child_pid)
+            assert pinned is not None
+            assert pinned.identity.start_identity == child_start
+            try:
+                evidence_publication._pidfd_send_signal(pinned.pidfd, signal.SIGKILL)
+            finally:
+                os.close(pinned.pidfd)
         writer.communicate(timeout=30)
         assert writer.returncode != 0
         if kill_parent:
