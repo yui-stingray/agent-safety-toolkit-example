@@ -251,13 +251,21 @@ def _cleanup_leaderless_test_session(session_id: int, nonce: str) -> None:
         for candidate in pinned.values():
             evidence_publication._wait_pinned_quiescent(candidate)
     finally:
-        if not completed:
-            for key in stopped:
-                evidence_publication._pidfd_send_signal(
-                    pinned[key].pidfd, signal.SIGCONT
-                )
-        for candidate in pinned.values():
-            os.close(candidate.pidfd)
+        try:
+            if not completed:
+                for key in stopped:
+                    try:
+                        evidence_publication._pidfd_send_signal(
+                            pinned[key].pidfd, signal.SIGCONT
+                        )
+                    except evidence_publication.PublicationError:
+                        continue
+        finally:
+            for candidate in pinned.values():
+                try:
+                    os.close(candidate.pidfd)
+                except OSError:
+                    continue
 
 
 @contextmanager
@@ -1535,6 +1543,67 @@ def test_test_cleanup_signals_only_nonce_bound_session_members(
     finally:
         os.close(read_fd)
         os.close(write_fd)
+
+
+def test_test_cleanup_attempts_every_resume_and_closes_pidfds_after_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identities = {
+        42: evidence_publication._ProcessIdentity(42, "S", 42, 41, 303),
+        43: evidence_publication._ProcessIdentity(43, "S", 43, 41, 304),
+    }
+    raw_fds = [os.pipe(), os.pipe()]
+    pinned = {
+        pid: evidence_publication._PinnedProcess(
+            identity,
+            os.dup(raw_fds[index][0]),
+        )
+        for index, (pid, identity) in enumerate(identities.items())
+    }
+    sent: list[tuple[int, int]] = []
+    resume_attempts = 0
+
+    def send_signal(pidfd: int, signum: int) -> bool:
+        nonlocal resume_attempts
+        sent.append((pidfd, signum))
+        if signum == signal.SIGCONT:
+            resume_attempts += 1
+            if resume_attempts == 1:
+                raise evidence_publication.PublicationError("forced resume failure")
+        return True
+
+    monkeypatch.setattr(
+        evidence_publication, "_session_member_pids", lambda _session: {42, 43}
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_read_process_identity",
+        lambda pid: identities.get(pid),
+    )
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_pin_test_owned_session_member",
+        lambda pid, *_args: pinned[pid],
+    )
+    monkeypatch.setattr(evidence_publication, "_pidfd_send_signal", send_signal)
+    monkeypatch.setattr(
+        evidence_publication,
+        "_wait_pinned_stopped",
+        lambda _item: (_ for _ in ()).throw(RuntimeError("forced stop failure")),
+    )
+    try:
+        with pytest.raises(RuntimeError, match="forced stop failure"):
+            _cleanup_leaderless_test_session(41, "0" * 32)
+
+        assert [signum for _pidfd, signum in sent].count(signal.SIGSTOP) == 2
+        assert resume_attempts == 2
+        for candidate in pinned.values():
+            with pytest.raises(OSError):
+                os.fstat(candidate.pidfd)
+    finally:
+        for read_fd, write_fd in raw_fds:
+            os.close(read_fd)
+            os.close(write_fd)
 
 
 def test_session_cleanup_treats_zombies_as_quiescent(
