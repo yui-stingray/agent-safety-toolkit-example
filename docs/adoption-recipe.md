@@ -69,11 +69,14 @@ bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli context lock -
 
 ## Toolkit Policy Integration Boundary
 
-`yui-agent-policy` 0.1.16 extends the bounded example-hook contract by failing
-closed on active output redirection, ANSI-C quoted words, file-writing command
-heads such as `tee`, and every Git push or send-pack form without an explicit
-visible force option. Explicit visible force forms remain `push.force`; the
-other modeled push and send-pack forms map to `unknown`. It retains the 0.1.15
+`yui-agent-policy` 0.1.17 extends the bounded example-hook contract by failing
+closed when unresolved parameter expansion can become a `wait` option or any
+argument of a recognized Git command, including global options before its
+subcommand. It retains the 0.1.16 hardening for active output redirection,
+ANSI-C quoted words, file-writing command heads such as `tee`, and every Git
+push or send-pack form without an explicit visible force option. Explicit
+visible force forms remain `push.force`; the other modeled push and send-pack
+forms map to `unknown`. It also retains the 0.1.15
 hardening for callback-bearing and state-mutating builtins, xtrace/`PS4`
 execution, shell and environment assignments, command-bearing Git environment
 variables and program options, and path-qualified or unlisted command heads,
@@ -114,10 +117,12 @@ file for that platform instead of removing hash checking.
 The checked-in lock targets CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64,
 and `run_demo.sh` rejects a different interpreter. Set `PYTHON` explicitly when
 needed. Generate a separate hash lock and CI job before claiming another
-platform. The demo also requires GNU `timeout`. `agent-guard` 0.3.7 retains v2
+platform. The demo also requires GNU `timeout`. `agent-guard` 0.3.8 retains v2
 audit-event path binding and independently bounds context scans, including
-custom context-policy regular expressions. Its PyPI long-description self-pin
-hardening is package/release hygiene, not a new runtime scanner. As a
+custom context-policy regular expressions. It also fails closed on
+meaning-changing workflow option overrides, hostile Git inspection state,
+unbounded inventory or transform inputs, self-authorizing inline suppressions,
+and inconsistent evidence component sections. As a
 repository-local defense in depth, the demo retains a 12-second external
 supervisor around context check, context inventory, surface inventory, context
 lock, drift check, report, and evidence-pack manifest. This does not claim a
@@ -185,7 +190,7 @@ same-user process that ignores the lock or directly modifies repository files.
 
 ## Bound Audit Events
 
-`agent-guard` 0.3.7 continues to emit report and evidence-pack manifest v2
+`agent-guard` 0.3.8 continues to emit report and evidence-pack manifest v2
 artifacts, retaining v2 audit-event path binding when the report and manifest
 producer receive the same repository-relative audit event path and the recognized
 `agent-guard.public_agent_policy_audit_event.v1` profile. The v2 entry binds
@@ -193,7 +198,7 @@ canonical JSON content with sanitized digest metadata; it does not embed the
 raw event body.
 
 Pass that same path and profile to both consumers with `--repo-root .`. At
-0.3.7, v2 consumers verify supplied event content and profile; when given
+0.3.8, v2 consumers verify supplied event content and profile; when given
 `--repo-root`, they also verify the canonical repository-relative event
 location. Consumers fail closed on content substitution, wrong profiles, wrong
 event locations when
@@ -201,7 +206,7 @@ given `--repo-root`, report/manifest mismatch, and missing, extra, or
 count-mismatched evidence. Do not duplicate guard validation in this recipe.
 The generic
 `agent-policy.audit_event.v1.1` schema is not the profile recognized by
-`agent-guard` 0.3.7; retain this demo's stricter public-artifact event contract.
+`agent-guard` 0.3.8; retain this demo's stricter public-artifact event contract.
 Neither event profile records the installed `yui-agent-policy` package version. The
 hash-locked environment plus CI regeneration establish process-level version
 provenance; consumers must not infer a producer version from the standalone
