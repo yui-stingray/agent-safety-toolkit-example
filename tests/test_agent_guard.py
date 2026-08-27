@@ -220,6 +220,8 @@ def start_demo(
                         and isinstance(child_start, int)
                         and not isinstance(child_start, bool)
                         and child_start > 0
+                        and evidence_publication._read_process_identity(child_pid)
+                        is not None
                     ):
                         evidence_publication._kill_session_members(
                             child_pid,
