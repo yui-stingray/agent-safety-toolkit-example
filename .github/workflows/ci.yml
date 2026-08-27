@@ -34,13 +34,12 @@ jobs:
           assert platform.system() == "Linux"
           assert platform.machine() == "x86_64"
           PY
+          python -m venv /tmp/agent-safety-download-check
 
       # actions/setup-python exposes the selected 3.12 runtime as `python`.
       # The current locked agent-guard release recognizes this form in workflow evidence.
       - name: Verify locked dependencies resolve from public PyPI
-        run: |
-          python -m venv /tmp/agent-safety-download-check
-          /tmp/agent-safety-download-check/bin/python -m pip download --index-url https://pypi.org/simple --no-deps --require-hashes -r requirements/agent-safety-tools.txt --dest /tmp/agent-safety-downloads
+        run: /tmp/agent-safety-download-check/bin/python -m pip download --index-url https://pypi.org/simple --no-deps --require-hashes -r requirements/agent-safety-tools.txt --dest /tmp/agent-safety-downloads
 
       - name: Install locked dependencies
         run: python -m pip install --require-hashes -r requirements/agent-safety-tools.txt
