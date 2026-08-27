@@ -123,11 +123,12 @@ explicit Python 3.12 executable when the activated environment is not first on
 `PATH`. It also requires GNU `timeout`. `agent-guard` 0.3.7 retains v2
 audit-event path binding and independently bounds context scans, including
 custom context-policy regular expressions. Its PyPI long-description self-pin
-hardening is package/release hygiene, not a new runtime scanner. The script
-retains a 12-second external supervisor around context check, context inventory,
-surface inventory, context lock, and report as defense in depth: timeout output
-is discarded and the demo fails closed. Review repository policy changes before
-running the demo.
+hardening is package/release hygiene, not a new runtime scanner. As a
+repository-local defense in depth, the script retains a 12-second external
+supervisor around context check, context inventory, surface inventory, context
+lock, drift check, report, and evidence-pack manifest: timeout output is
+discarded and the demo fails closed. This does not claim a fix in the installed
+package. Review repository policy changes before running the demo.
 
 The end-to-end script runs:
 

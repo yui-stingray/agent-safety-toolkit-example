@@ -718,10 +718,12 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
 
     assert 'PYTHON="$PYTHON_BIN" bash scripts/run_agent_guard_bounded.sh \\\n' in runner
     assert 'python -m agent_guard.cli "$@"' in runner
-    assert runner.count("run_bounded_context_guard") == 6
+    assert runner.count("run_bounded_agent_guard") == 8
     assert "timeout --signal=KILL 12s" in bounded_runner
     assert '} 2>>"$stderr_path"' in bounded_runner
-    assert "context evaluation exceeded the external execution budget" in bounded_runner
+    assert "execution exceeded the external execution budget" in bounded_runner
+    assert "run_bounded_agent_guard drift check" in runner
+    assert "run_bounded_agent_guard evidence-pack manifest" in runner
     assert "agent-guard() {" in readme
     assert 'python -m agent_guard.cli "$@"' in readme
     assert "unset -f agent-guard" in readme
@@ -2392,7 +2394,7 @@ def test_bounded_guard_sanitizes_invalid_temp_directory(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert result.stdout == ""
-    assert result.stderr == "agent-guard bounded context execution failed\n"
+    assert result.stderr == "agent-guard bounded execution failed\n"
     assert str(invalid_temp) not in result.stderr
 
 

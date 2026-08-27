@@ -117,10 +117,12 @@ needed. Generate a separate hash lock and CI job before claiming another
 platform. The demo also requires GNU `timeout`. `agent-guard` 0.3.7 retains v2
 audit-event path binding and independently bounds context scans, including
 custom context-policy regular expressions. Its PyPI long-description self-pin
-hardening is package/release hygiene, not a new runtime scanner. The demo
-retains a 12-second external supervisor around context check, context inventory,
-surface inventory, context lock, and report as defense in depth; review
-context-policy changes before execution.
+hardening is package/release hygiene, not a new runtime scanner. As a
+repository-local defense in depth, the demo retains a 12-second external
+supervisor around context check, context inventory, surface inventory, context
+lock, drift check, report, and evidence-pack manifest. This does not claim a
+fix in the installed package; review repository policy changes before
+execution.
 
 `bash scripts/run_demo.sh` is the documented end-to-end publisher. It invokes
 `scripts/evidence_publication.py run --repo .`, the internal publishing path

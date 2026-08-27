@@ -27,7 +27,7 @@ if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] ==
 fi
 
 if ! command -v timeout >/dev/null 2>&1; then
-  echo "A timeout supervisor is required for the agent-guard 0.3.7 defense-in-depth context checks." >&2
+  echo "A timeout supervisor is required for the agent-guard 0.3.7 defense-in-depth static checks." >&2
   exit 1
 fi
 
@@ -191,7 +191,7 @@ PY
   DECISION_OUTPUT=""
 }
 
-run_bounded_context_guard() {
+run_bounded_agent_guard() {
   PYTHON="$PYTHON_BIN" bash scripts/run_agent_guard_bounded.sh \
     python -m agent_guard.cli "$@"
 }
@@ -255,15 +255,15 @@ expect_decision 2 require_approval write hard_guardrail \
   --first-write
 
 "$PYTHON_BIN" -m agent_guard.cli path check --root . --policy .agent-guard/path-policy.yaml --json
-run_bounded_context_guard context check --root . --policy .agent-guard/context-policy.yaml --json
-run_bounded_context_guard context inventory --root . --policy .agent-guard/context-policy.yaml --json
-run_bounded_context_guard surface inventory \
+run_bounded_agent_guard context check --root . --policy .agent-guard/context-policy.yaml --json
+run_bounded_agent_guard context inventory --root . --policy .agent-guard/context-policy.yaml --json
+run_bounded_agent_guard surface inventory \
   --root . \
   --context-policy .agent-guard/context-policy.yaml \
   --schema-version v2 \
   --json \
   > "$SURFACE_INVENTORY_TMP"
-run_bounded_context_guard context lock \
+run_bounded_agent_guard context lock \
   --root . \
   --policy .agent-guard/context-policy.yaml \
   --check \
@@ -279,8 +279,8 @@ run_bounded_context_guard context lock \
 "$PYTHON_BIN" -m agent_guard.cli mcp check --root . --policy .agent-guard/mcp-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli digest check --root . --policy .agent-guard/context-digest-policy.yaml --json
 "$PYTHON_BIN" -m agent_guard.cli workflow check --root . --policy .agent-guard/workflow-policy.yaml --json
-"$PYTHON_BIN" -m agent_guard.cli drift check --root . --profile recommended --schema-version v2 --json
-run_bounded_context_guard report \
+run_bounded_agent_guard drift check --root . --profile recommended --schema-version v2 --json
+run_bounded_agent_guard report \
   --root . \
   --context-policy .agent-guard/context-policy.yaml \
   --evidence-preset recommended \
@@ -296,7 +296,7 @@ run_bounded_context_guard report \
   --evidence "$REPORT_PATH" \
   --profile recommended \
   --json
-"$PYTHON_BIN" -m agent_guard.cli evidence-pack manifest \
+run_bounded_agent_guard evidence-pack manifest \
   --root . \
   --report "$REPORT_PATH" \
   --artifact "$REPORT_PATH" \

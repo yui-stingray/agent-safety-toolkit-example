@@ -5,16 +5,16 @@ checks:
     sha256: 1836da432c9a190aa0d086ec8e45fe7733fdaf0ba592d5f2949849a81346e863
   - id: readme
     path: README.md
-    sha256: 047124b8c792e52c18380cc912d002331bfd21c6eab2b3073fd479fd54db2da6
+    sha256: 65204c51ef4f70c658979fdb7346c8d4f43cb42ae8b36106dcc19771e846d96f
   - id: demo_runner
     path: scripts/run_demo.sh
-    sha256: 87591a76cf950289badef118c2a92b5ea3128fcc105db6f0a161510e2ab8dd67
+    sha256: b7e7fdd226de8084844d09723b160f8a813da7cd08c9f0511dedf7813567a2fb
   - id: evidence_publisher
     path: scripts/evidence_publication.py
     sha256: ae33c402d6cf6e90f788d870618976cff10f6374890ab92b20053fec8a5a2741
   - id: bounded_guard_runner
     path: scripts/run_agent_guard_bounded.sh
-    sha256: e77518826e8a97e1b22f5178345f47107140daada61a90b79adbad2cfa4df35e
+    sha256: d6e4ada1208f56abc4511d09a22a3dd78e43702a941f954907b75ca4c83bd5ba
   - id: policy_event_contract
     path: scripts/policy_event_contract.py
     sha256: 54470407c75807b70974793890a91c5ce8c6504a9640f847395914971042b3c8
