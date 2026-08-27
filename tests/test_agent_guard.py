@@ -584,7 +584,7 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
         in ci_workflow
     )
     assert (
-        "bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli surface inventory"
+        "python -m agent_guard.cli surface inventory --root ."
         in ci_workflow
     )
     assert (
@@ -627,13 +627,13 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "--output .agent-guard/evidence/agent-guard-report.json" not in readme
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
-        "yui-agent-guard==0.3.7 \\\n"
-        "    --hash=sha256:e67a64bf0481c1de85646ff886d5c12c115fb48f736195aa4df4ddb6f8106c4d"
+        "yui-agent-guard==0.3.8 \\\n"
+        "    --hash=sha256:ec8cd9cde7925c643baa9d5e69b85f1262b1e77e47fbab8abd044956c7ede55c"
         in requirements
     )
     assert (
-        "yui-agent-policy==0.1.16 \\\n"
-        "    --hash=sha256:5f41b62fc8fc113470c84e2b6b92689aeb03046323674d52b010d46991010098"
+        "yui-agent-policy==0.1.17 \\\n"
+        "    --hash=sha256:45a647f0829952029e8cbd9fcc0396d4155201e74a6bf3d7cfdd79bb928fe153"
         in requirements
     )
     assert requirements.startswith(
@@ -662,7 +662,11 @@ def test_toolkit_policy_integration_boundary_is_documented() -> None:
     assert "validate_toolkit_policy(policy)" in wrapper
     for document in documents:
         normalized = " ".join(document.split())
-        assert "0.1.16 extends the bounded example-hook contract" in normalized
+        assert "0.1.17 extends the bounded example-hook contract" in normalized
+        assert "unresolved parameter expansion can become a `wait` option" in normalized
+        assert "any argument of a recognized Git command" in normalized
+        assert "global options before its subcommand" in normalized
+        assert "0.1.16 hardening" in normalized
         assert "active output redirection" in normalized
         assert "ANSI-C quoted words" in normalized
         assert "file-writing command heads such as `tee`" in normalized
@@ -701,8 +705,12 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
         assert "CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64" in normalized
         assert "GNU `timeout`" in normalized
         assert "12-second external supervisor" in normalized
-        assert "0.3.7 retains v2 audit-event path binding and independently bounds context scans" in normalized
-        assert "PyPI long-description self-pin hardening is package/release hygiene, not a new runtime scanner" in normalized
+        assert "0.3.8 retains v2 audit-event path binding and independently bounds context scans" in normalized
+        assert "meaning-changing workflow option overrides" in normalized
+        assert "hostile Git inspection state" in normalized
+        assert "unbounded inventory or transform inputs" in normalized
+        assert "self-authorizing inline suppressions" in normalized
+        assert "inconsistent evidence component sections" in normalized
         assert "defense in depth" in normalized
         assert "not a fixed `agent-guard` release" not in normalized
         assert "durable rollback journal" in normalized
@@ -733,7 +741,7 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
     assert 'assert platform.system() == "Linux"' in workflow
     assert 'assert platform.machine() == "x86_64"' in workflow
     assert (
-        "bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli surface inventory"
+        "python -m agent_guard.cli surface inventory --root ."
         in workflow
     )
 
