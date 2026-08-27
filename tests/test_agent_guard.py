@@ -180,10 +180,38 @@ class DemoProcess:
         return self.output.read(), ""
 
 
-def _cleanup_leaderless_test_session(session_id: int) -> None:
-    """Reap test-owned members without relaxing production recovery."""
+def _pin_test_owned_session_member(
+    pid: int,
+    session_id: int,
+    nonce: str,
+) -> evidence_publication._PinnedProcess | None:
+    pinned = evidence_publication._pin_session_member(pid, session_id)
+    if pinned is None:
+        return None
+    expected = f"AGENT_SAFETY_EVIDENCE_STAGE_NONCE={nonce}".encode("ascii")
+    try:
+        environment = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+        current = evidence_publication._read_process_identity(pid)
+        if (
+            expected not in environment
+            or current is None
+            or current.start_identity != pinned.identity.start_identity
+            or current.session != session_id
+            or not evidence_publication._pidfd_send_signal(pinned.pidfd, 0)
+        ):
+            os.close(pinned.pidfd)
+            return None
+        return pinned
+    except OSError:
+        os.close(pinned.pidfd)
+        return None
+
+
+def _cleanup_leaderless_test_session(session_id: int, nonce: str) -> None:
+    """Reap only pidfd-pinned members carrying this test stage's nonce."""
     pinned: dict[tuple[int, int], evidence_publication._PinnedProcess] = {}
     stopped: set[tuple[int, int]] = set()
+    completed = False
     try:
         while True:
             for pid in evidence_publication._session_member_pids(session_id):
@@ -193,9 +221,11 @@ def _cleanup_leaderless_test_session(session_id: int) -> None:
                 key = (identity.pid, identity.start_identity)
                 if key in pinned:
                     continue
-                candidate = evidence_publication._pin_session_member(pid, session_id)
+                candidate = _pin_test_owned_session_member(pid, session_id, nonce)
                 if candidate is not None:
                     pinned[key] = candidate
+                elif evidence_publication._read_process_identity(pid) == identity:
+                    raise RuntimeError("test-owned session identity is invalid")
             for key, candidate in pinned.items():
                 if key in stopped:
                     continue
@@ -217,9 +247,15 @@ def _cleanup_leaderless_test_session(session_id: int) -> None:
 
         for candidate in pinned.values():
             evidence_publication._pidfd_send_signal(candidate.pidfd, signal.SIGKILL)
+        completed = True
         for candidate in pinned.values():
             evidence_publication._wait_pinned_quiescent(candidate)
     finally:
+        if not completed:
+            for key in stopped:
+                evidence_publication._pidfd_send_signal(
+                    pinned[key].pidfd, signal.SIGCONT
+                )
         for candidate in pinned.values():
             os.close(candidate.pidfd)
 
@@ -257,6 +293,7 @@ def start_demo(
                         continue
                     child_pid = marker.get("child_pid")
                     child_start = marker.get("child_start")
+                    nonce = marker.get("nonce")
                     if (
                         isinstance(child_pid, int)
                         and not isinstance(child_pid, bool)
@@ -276,13 +313,23 @@ def start_demo(
                         elif evidence_publication._session_executable_member_pids(
                             child_pid
                         ):
-                            _cleanup_leaderless_test_session(child_pid)
+                            if (
+                                not isinstance(nonce, str)
+                                or len(nonce) != 32
+                                or not set(nonce) <= set("0123456789abcdef")
+                            ):
+                                raise RuntimeError(
+                                    "test-owned staged session identity is unavailable"
+                                )
+                            _cleanup_leaderless_test_session(child_pid, nonce)
         finally:
-            evidence_publication._kill_process_session(
-                process,
-                expected_leader_start=demo.leader_start,
-            )
-            output.close()
+            try:
+                evidence_publication._kill_process_session(
+                    process,
+                    expected_leader_start=demo.leader_start,
+                )
+            finally:
+                output.close()
 
 
 def wait_for_marker(marker: Path, process: DemoProcess) -> None:
@@ -1381,6 +1428,113 @@ def test_session_cleanup_preserves_leaderless_active_session(
             41,
             expected_leader_start=101,
         )
+
+
+@pytest.mark.parametrize("matches", [False, True])
+def test_test_cleanup_pins_only_stage_nonce_bound_processes(
+    monkeypatch: pytest.MonkeyPatch,
+    matches: bool,
+) -> None:
+    identity = evidence_publication._ProcessIdentity(42, "S", 42, 41, 303)
+    read_fd, write_fd = os.pipe()
+    pinned = evidence_publication._PinnedProcess(identity, os.dup(read_fd))
+    nonce = "0" * 32
+    observed_nonce = nonce if matches else "1" * 32
+    sent: list[int] = []
+    monkeypatch.setattr(
+        evidence_publication, "_pin_session_member", lambda *_args: pinned
+    )
+    monkeypatch.setattr(
+        evidence_publication, "_read_process_identity", lambda _pid: identity
+    )
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda _path: (
+            f"AGENT_SAFETY_EVIDENCE_STAGE_NONCE={observed_nonce}\0".encode("ascii")
+        ),
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pidfd_send_signal",
+        lambda _pidfd, signum: sent.append(signum) or True,
+    )
+    try:
+        result = _pin_test_owned_session_member(42, 41, nonce)
+        if matches:
+            assert result is pinned
+            assert sent == [0]
+            os.close(pinned.pidfd)
+        else:
+            assert result is None
+            assert sent == []
+            with pytest.raises(OSError):
+                os.fstat(pinned.pidfd)
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+
+
+def test_test_cleanup_rejects_unowned_reused_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = evidence_publication._ProcessIdentity(42, "S", 42, 41, 303)
+    monkeypatch.setattr(
+        evidence_publication, "_session_member_pids", lambda _session: {42}
+    )
+    monkeypatch.setattr(
+        evidence_publication, "_read_process_identity", lambda _pid: identity
+    )
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_pin_test_owned_session_member",
+        lambda *_args: None,
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pidfd_send_signal",
+        lambda *_args: pytest.fail("unowned process was signalled"),
+    )
+
+    with pytest.raises(RuntimeError, match="test-owned session identity is invalid"):
+        _cleanup_leaderless_test_session(41, "0" * 32)
+
+
+def test_test_cleanup_signals_only_nonce_bound_session_members(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = evidence_publication._ProcessIdentity(42, "S", 42, 41, 303)
+    read_fd, write_fd = os.pipe()
+    pinned = evidence_publication._PinnedProcess(identity, os.dup(read_fd))
+    sent: list[int] = []
+    monkeypatch.setattr(
+        evidence_publication, "_session_member_pids", lambda _session: {42}
+    )
+    monkeypatch.setattr(
+        evidence_publication, "_read_process_identity", lambda _pid: identity
+    )
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_pin_test_owned_session_member",
+        lambda *_args: pinned,
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pidfd_send_signal",
+        lambda _pidfd, signum: sent.append(signum) or True,
+    )
+    monkeypatch.setattr(evidence_publication, "_wait_pinned_stopped", lambda _item: None)
+    monkeypatch.setattr(
+        evidence_publication, "_wait_pinned_quiescent", lambda _item: None
+    )
+    try:
+        _cleanup_leaderless_test_session(41, "0" * 32)
+        assert sent == [signal.SIGSTOP, signal.SIGKILL]
+        with pytest.raises(OSError):
+            os.fstat(pinned.pidfd)
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
 
 
 def test_session_cleanup_treats_zombies_as_quiescent(
