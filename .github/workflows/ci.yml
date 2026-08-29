@@ -52,11 +52,6 @@ jobs:
       - name: Check guard workflow wiring
         run: python -I -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json
 
-      # Public 0.3.8 inventory does not yet index the isolated module form.
-      # Keep this real compatibility scan until the pinned guard is updated.
-      - name: Check published guard workflow surface compatibility
-        run: agent-guard surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json
-
       - name: Run end-to-end demo
         run: bash scripts/run_demo.sh
 

@@ -713,22 +713,15 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
         "python -I -m agent_guard.cli surface inventory --root . "
         "--context-policy .agent-guard/context-policy.yaml --schema-version v2 --json"
     )
-    published_compatibility = named_workflow_step(
-        "Check published guard workflow surface compatibility"
-    )
-    assert published_compatibility.get("run") == (
-        "agent-guard surface inventory --root . "
-        "--context-policy .agent-guard/context-policy.yaml --schema-version v2 --json"
-    )
-    assert sum(
-        str(step.get("run", "")).startswith("agent-guard surface inventory ")
+    assert all(
+        step.get("name") != "Check published guard workflow surface compatibility"
         for step in workflow_steps
         if isinstance(step, dict)
-    ) == 1
+    )
     requirements = (ROOT / "requirements" / "agent-safety-tools.txt").read_text(
         encoding="utf-8"
     )
-    assert "yui-agent-guard==0.3.8" in requirements
+    assert "yui-agent-guard==0.3.9" in requirements
     assert (
         "git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json"
         in ci_workflow
@@ -769,13 +762,13 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "--output .agent-guard/evidence/agent-guard-report.json" not in readme
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
-        "yui-agent-guard==0.3.8 \\\n"
-        "    --hash=sha256:ec8cd9cde7925c643baa9d5e69b85f1262b1e77e47fbab8abd044956c7ede55c"
+        "yui-agent-guard==0.3.9 \\\n"
+        "    --hash=sha256:93c9a53f651f5f09e2ee4f9e0348221eeb8bd9a75c4710e6d56e89e22e226cee"
         in requirements
     )
     assert (
-        "yui-agent-policy==0.1.17 \\\n"
-        "    --hash=sha256:45a647f0829952029e8cbd9fcc0396d4155201e74a6bf3d7cfdd79bb928fe153"
+        "yui-agent-policy==0.1.18 \\\n"
+        "    --hash=sha256:f48ac054e9c0a5c65966f587f56c89709ddc87fd7ba34f3d34c507d404cf0c25"
         in requirements
     )
     assert requirements.startswith(
@@ -804,7 +797,10 @@ def test_toolkit_policy_integration_boundary_is_documented() -> None:
     assert "validate_toolkit_policy(policy)" in wrapper
     for document in documents:
         normalized = " ".join(document.split())
-        assert "0.1.17 extends the bounded example-hook contract" in normalized
+        assert "0.1.18 extends the bounded example-hook contract" in normalized
+        assert "Bash comment rules before tokenization" in normalized
+        assert "line-continuation-formed process substitutions" in normalized
+        assert "0.1.17 hardening" in normalized
         assert "unresolved parameter expansion can become a `wait` option" in normalized
         assert "any argument of a recognized Git command" in normalized
         assert "global options before its subcommand" in normalized
@@ -847,7 +843,10 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
         assert "CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64" in normalized
         assert "GNU `timeout`" in normalized
         assert "12-second external supervisor" in normalized
-        assert "0.3.8 retains v2 audit-event path binding and independently bounds context scans" in normalized
+        assert "0.3.9 retains v2 audit-event path binding and independently bounds context scans" in normalized
+        assert "requires isolated Python module launchers for workflow evidence" in normalized
+        assert "binds report outputs against link traversal" in normalized
+        assert "rejects duplicate constructed YAML keys" in normalized
         assert "meaning-changing workflow option overrides" in normalized
         assert "hostile Git inspection state" in normalized
         assert "unbounded inventory or transform inputs" in normalized
