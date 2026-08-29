@@ -143,6 +143,9 @@ def test_execution_commands_keep_candidate_sources_out_of_subprocess_arguments(
         "committed hash lock installation",
         "candidate wheel overlay",
         "pip dependency check",
+        "candidate evidence warmup",
+        "candidate evidence baseline staging",
+        "candidate evidence baseline commit",
         "full toolkit pytest",
         "toolkit demo",
         "example snapshot consumer",
@@ -152,9 +155,17 @@ def test_execution_commands_keep_candidate_sources_out_of_subprocess_arguments(
     assert "--no-index" in commands[1].argv
     assert "--no-deps" in commands[1].argv
     assert "--force-reinstall" in commands[1].argv
-    assert commands[4].argv == ("bash", "scripts/run_demo.sh")
-    assert commands[5].argv[-1] == "example"
-    assert commands[6].argv[-1] == "packaged"
+    assert commands[3].argv == ("bash", "scripts/run_demo.sh")
+    assert commands[4].argv == (
+        "git",
+        "add",
+        "--",
+        *compatibility.CANDIDATE_EVIDENCE_PATHS,
+    )
+    assert "--allow-empty" in commands[5].argv
+    assert commands[7].argv == ("bash", "scripts/run_demo.sh")
+    assert commands[8].argv[-1] == "example"
+    assert commands[9].argv[-1] == "packaged"
     assert str(source_marker) not in "\n".join(
         argument for command in commands for argument in command.argv
     )
@@ -175,6 +186,8 @@ def test_harness_uses_disposable_inputs_and_preserves_live_files(
     calls: list[tuple[tuple[str, ...], Path, dict[str, str]]] = []
 
     monkeypatch.setenv("PIP_INDEX_URL", "https://private.example.invalid/simple")
+    monkeypatch.setenv("PYTEST_ADDOPTS", "--collect-only")
+    monkeypatch.setenv("PYTEST_PLUGINS", "private-pytest-plugin-marker")
     monkeypatch.setenv("PYTHONPATH", "private-pythonpath-marker")
     monkeypatch.setenv(
         compatibility.CANDIDATE_COMPATIBILITY_ENV,
@@ -233,6 +246,10 @@ def test_harness_uses_disposable_inputs_and_preserves_live_files(
         for _command, _cwd, environment in calls
         if compatibility.CANDIDATE_COMPATIBILITY_ENV in environment
     ]
+    assert all(
+        not any(name.startswith("PYTEST_") for name in environment)
+        for environment in candidate_environments
+    )
     assert len(candidate_environments) == len(
         compatibility.execution_commands(
             tmp_path / "venv" / "bin" / "python",

@@ -24,6 +24,11 @@ LOCK_PATH = Path("requirements/agent-safety-tools.txt")
 SUPPORTED_DISTRIBUTIONS = frozenset({"yui-agent-guard", "yui-agent-policy"})
 CANDIDATE_COMPATIBILITY_ENV = "AGENT_SAFETY_CANDIDATE_WHEEL_COMPATIBILITY"
 PRIVATE_TEMP_PARENT = Path("/tmp")
+CANDIDATE_EVIDENCE_PATHS = (
+    ".agent-guard/evidence/agent-guard-report.json",
+    ".agent-guard/evidence/agent-guard-evidence-pack.json",
+    ".agent-policy/evidence/policy-admission-event.json",
+)
 WORKTREE_IGNORES = shutil.ignore_patterns(
     ".git",
     ".venv",
@@ -179,6 +184,7 @@ def _isolated_environment(temp_root: Path, venv: Path | None = None) -> dict[str
         if (
             name.startswith("GIT_")
             or name.startswith("PIP_")
+            or name.startswith("PYTEST_")
             or name.startswith("PYTHON")
             or name == "VIRTUAL_ENV"
             or name == CANDIDATE_COMPATIBILITY_ENV
@@ -352,6 +358,29 @@ def execution_commands(
             ),
         ),
         Command("pip dependency check", (*pip, "check")),
+        Command("candidate evidence warmup", ("bash", "scripts/run_demo.sh")),
+        Command(
+            "candidate evidence baseline staging",
+            ("git", "add", "--", *CANDIDATE_EVIDENCE_PATHS),
+        ),
+        Command(
+            "candidate evidence baseline commit",
+            (
+                "git",
+                "-c",
+                "user.name=Candidate Wheel Check",
+                "-c",
+                "user.email=candidate-wheel-check@example.invalid",
+                "-c",
+                f"core.hooksPath={os.devnull}",
+                "commit",
+                "--quiet",
+                "--allow-empty",
+                "--no-gpg-sign",
+                "-m",
+                "candidate evidence baseline",
+            ),
+        ),
         Command("full toolkit pytest", (str(python), "-m", "pytest", "-q")),
         Command("toolkit demo", ("bash", "scripts/run_demo.sh")),
         Command(

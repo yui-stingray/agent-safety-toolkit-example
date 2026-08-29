@@ -803,6 +803,8 @@ def test_candidate_wheel_gate_is_documented_as_prepublication_compatibility() ->
     assert "not a sandbox for an untrusted wheel" in normalized
     assert "Do not update this repository's lock" in normalized
     assert "exact Toolkit commit" in normalized_checklist
+    assert "candidate-only evidence baseline" in normalized_checklist
+    assert "self-size and byte-stability assertions remain active" in normalized_checklist
     assert "live lock and evidence remain pinned" in normalized_checklist
 
 
@@ -897,6 +899,10 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
     assert "journal without its transaction marker is invalid" in normalized_protocol
     assert "SIGKILL-equivalent crash" in normalized_protocol
     assert "second-run byte stability" in normalized_protocol
+    assert "after successful cleanup is durably recorded" in normalized_protocol
+    assert "before the staged child is released" in normalized_protocol
+    assert "retains the launched child identity for recovery" in normalized_protocol
+    assert "accepted-state exception, not a producer emission" in normalized_protocol
     assert "docs/evidence-publication-protocol.md" in readme
     assert "evidence-publication-protocol.md" in recipe
 
@@ -1071,11 +1077,10 @@ def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> N
         for surface in report["surface_inventory"]["surfaces"]
         if surface["surface"] == "evidence_artifact"
     ]
-    if not candidate_compatibility:
-        assert all(
-            surface["size_bytes"] == (repo / surface["path"]).stat().st_size
-            for surface in evidence_surfaces
-        )
+    assert all(
+        surface["size_bytes"] == (repo / surface["path"]).stat().st_size
+        for surface in evidence_surfaces
+    )
 
     second_result = run_demo(repo, temp_dir=tmp_path)
 
@@ -1404,6 +1409,39 @@ def test_stale_stage_uses_process_start_identity_not_only_pid(tmp_path: Path) ->
     )
 
     evidence_publication._cleanup_stale_stages(repo, state)
+    assert not container.exists()
+
+
+def test_stale_stage_ignores_inactive_child_start_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    state = evidence_publication._ensure_state_directory(repo)
+    container = state / "stage-inactive-child"
+    container.mkdir(mode=0o700)
+    actual_start = evidence_publication._process_start_identity(os.getpid())
+    assert actual_start is not None
+    evidence_publication._replace_json_durable(
+        container / evidence_publication.STAGE_MARKER,
+        {
+            "schema_version": evidence_publication.STAGE_SCHEMA,
+            "parent_pid": os.getpid(),
+            "parent_start": actual_start + 1,
+            "child_pid": 0,
+            "child_start": 404,
+            "nonce": "0" * 32,
+            "worktree_device": None,
+            "worktree_inode": None,
+        },
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_kill_session_members",
+        lambda *_args, **_kwargs: pytest.fail("inactive child identity was signaled"),
+    )
+
+    evidence_publication._cleanup_stale_stages(repo, state)
+
     assert not container.exists()
 
 
@@ -1809,11 +1847,15 @@ def test_commit_linearization_rejects_signal_observed_before_decision() -> None:
     [
         ("parent_pid", True),
         ("parent_pid", 0),
+        ("parent_start", True),
         ("child_pid", False),
         ("child_pid", -1),
+        ("child_start", True),
+        ("worktree_device", True),
+        ("worktree_inode", False),
     ],
 )
-def test_stale_stage_rejects_malformed_pid_fields(
+def test_stale_stage_rejects_malformed_identity_fields(
     tmp_path: Path, field: str, value: object
 ) -> None:
     repo = copy_demo_repo(tmp_path)

@@ -38,12 +38,16 @@ The stage marker has exactly these fields:
 | Field | Contract |
 | --- | --- |
 | `schema_version` | `agent-safety-toolkit.evidence-stage.v1` |
-| `parent_pid`, `child_pid` | positive process IDs, except `child_pid` is zero before launch |
-| `parent_start`, `child_start` | Linux process-start identities or `null` before child launch |
+| `parent_pid`, `child_pid` | positive process IDs, except `child_pid` is zero before the staged child is released and after successful cleanup is durably recorded; between those marker rewrites it retains the launched child identity for recovery even if the process has exited |
+| `parent_start`, `child_start` | Linux process-start identities or `null`; `child_start` MUST be a positive identity when `child_pid` is positive |
 | `nonce` | 32 lowercase hexadecimal characters |
 | `worktree_device`, `worktree_inode` | staged worktree identity or `null` before creation |
 
 The parent MUST publish the marker durably before releasing the staged child.
+The publisher MUST emit `child_start=null` whenever it emits `child_pid=0`.
+For recovery compatibility, a stale marker with `child_pid=0` and an integer
+`child_start` is accepted as an inactive child record; recovery MUST NOT signal
+that identity. This is an accepted-state exception, not a producer emission.
 Recovery MUST signal a recorded child session only after pinning the matching
 process/start/session identity. If safe cleanup cannot be proven, recovery MUST
 preserve state and fail closed.

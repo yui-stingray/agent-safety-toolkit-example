@@ -983,19 +983,31 @@ def _cleanup_stale_stages(repo: Path, state: Path) -> None:
             or not set(marker["nonce"]) <= set("0123456789abcdef")
             or (
                 marker["worktree_device"] is not None
-                and not isinstance(marker["worktree_device"], int)
+                and (
+                    not isinstance(marker["worktree_device"], int)
+                    or isinstance(marker["worktree_device"], bool)
+                )
             )
             or (
                 marker["worktree_inode"] is not None
-                and not isinstance(marker["worktree_inode"], int)
+                and (
+                    not isinstance(marker["worktree_inode"], int)
+                    or isinstance(marker["worktree_inode"], bool)
+                )
             )
             or (
                 marker["parent_start"] is not None
-                and not isinstance(marker["parent_start"], int)
+                and (
+                    not isinstance(marker["parent_start"], int)
+                    or isinstance(marker["parent_start"], bool)
+                )
             )
             or (
                 marker["child_start"] is not None
-                and not isinstance(marker["child_start"], int)
+                and (
+                    not isinstance(marker["child_start"], int)
+                    or isinstance(marker["child_start"], bool)
+                )
             )
         ):
             raise PublicationError("evidence publication state is invalid")
