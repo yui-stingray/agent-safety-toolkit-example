@@ -5,6 +5,7 @@ import json
 import os
 import signal
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -2143,6 +2144,30 @@ def test_special_mode_is_rejected_before_transaction_is_exposed(tmp_path: Path) 
     assert not list(
         state.glob(f"{evidence_publication.TRANSACTION_PREPARATION_PREFIX}*")
     )
+
+
+def test_transaction_journal_separates_backup_digest_from_live_restore_mode(
+    tmp_path: Path,
+) -> None:
+    repo = copy_demo_repo(tmp_path)
+    candidate = tmp_path / "candidate"
+    shutil.copytree(repo, candidate)
+    role, relative = evidence_publication.ARTIFACTS[0]
+    (repo / relative).chmod(0o640)
+    state = evidence_publication._ensure_state_directory(repo)
+
+    with evidence_publication._open_live_artifacts(
+        repo, create_parents=False
+    ) as live:
+        transaction, journal = evidence_publication._begin_transaction(
+            live, state, candidate
+        )
+
+    entry = next(item for item in journal["artifacts"] if item["role"] == role)
+    backup = transaction / "old" / role
+    assert entry["old_mode"] == 0o640
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o400
+    assert entry["old_digest"] == evidence_publication._digest(backup)
 
 
 def test_consumer_recovers_stale_post_commit_cleanup_state(tmp_path: Path) -> None:

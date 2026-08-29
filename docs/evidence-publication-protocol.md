@@ -66,7 +66,8 @@ Each entry has exactly:
 | `role` | fixed role |
 | `path` | fixed canonical repository-relative path |
 | `old_present` | whether the complete old set existed |
-| `old_digest`, `old_mode` | old private-copy identity and mode, or both `null` |
+| `old_digest` | digest of the private old-artifact backup, or `null` |
+| `old_mode` | original live-artifact mode to restore, or `null` |
 | `new_digest` | new private-copy identity |
 | `rollback_temp` | fixed repository-relative rollback temporary path |
 
