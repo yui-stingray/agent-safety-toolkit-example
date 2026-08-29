@@ -24,6 +24,10 @@ def supported_runtime() -> compatibility.Runtime:
     return compatibility.Runtime("cpython", (3, 12), "Linux", "x86_64")
 
 
+def test_candidate_state_uses_native_linux_temp_not_inherited_temp() -> None:
+    assert compatibility.PRIVATE_TEMP_PARENT == Path("/tmp")
+
+
 def test_stage_candidate_wheels_accepts_one_or_both_supported_distributions(
     tmp_path: Path,
 ) -> None:
@@ -172,6 +176,10 @@ def test_harness_uses_disposable_inputs_and_preserves_live_files(
 
     monkeypatch.setenv("PIP_INDEX_URL", "https://private.example.invalid/simple")
     monkeypatch.setenv("PYTHONPATH", "private-pythonpath-marker")
+    monkeypatch.setenv(
+        compatibility.CANDIDATE_COMPATIBILITY_ENV,
+        "untrusted-inherited-marker",
+    )
 
     def fake_run(
         args: list[str], *, cwd: Path, env: dict[str, str], **_kwargs: object
@@ -220,6 +228,27 @@ def test_harness_uses_disposable_inputs_and_preserves_live_files(
     assert pip_environments
     assert all("PIP_INDEX_URL" not in environment for environment in pip_environments)
     assert all("PYTHONPATH" not in environment for environment in pip_environments)
+    candidate_environments = [
+        environment
+        for _command, _cwd, environment in calls
+        if compatibility.CANDIDATE_COMPATIBILITY_ENV in environment
+    ]
+    assert len(candidate_environments) == len(
+        compatibility.execution_commands(
+            tmp_path / "venv" / "bin" / "python",
+            tmp_path / "toolkit",
+            (
+                compatibility.CandidateWheel(
+                    "yui-agent-guard",
+                    tmp_path / "staged" / "guard.whl",
+                ),
+            ),
+        )
+    )
+    assert all(
+        environment[compatibility.CANDIDATE_COMPATIBILITY_ENV] == "1"
+        for environment in candidate_environments
+    )
 
 
 def test_subprocess_failures_discard_untrusted_output(

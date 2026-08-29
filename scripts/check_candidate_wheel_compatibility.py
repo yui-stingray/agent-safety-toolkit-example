@@ -22,6 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = Path("requirements/agent-safety-tools.txt")
 SUPPORTED_DISTRIBUTIONS = frozenset({"yui-agent-guard", "yui-agent-policy"})
+CANDIDATE_COMPATIBILITY_ENV = "AGENT_SAFETY_CANDIDATE_WHEEL_COMPATIBILITY"
+PRIVATE_TEMP_PARENT = Path("/tmp")
 WORKTREE_IGNORES = shutil.ignore_patterns(
     ".git",
     ".venv",
@@ -179,6 +181,7 @@ def _isolated_environment(temp_root: Path, venv: Path | None = None) -> dict[str
             or name.startswith("PIP_")
             or name.startswith("PYTHON")
             or name == "VIRTUAL_ENV"
+            or name == CANDIDATE_COMPATIBILITY_ENV
         ):
             environment.pop(name, None)
 
@@ -387,7 +390,8 @@ def run_compatibility(
     _require_supported_runtime(_current_runtime() if runtime is None else runtime)
 
     with tempfile.TemporaryDirectory(
-        prefix="candidate-wheel-compatibility-"
+        prefix="candidate-wheel-compatibility-",
+        dir=PRIVATE_TEMP_PARENT,
     ) as directory:
         temp_root = Path(directory)
         bootstrap_environment = _isolated_environment(temp_root)
@@ -399,6 +403,7 @@ def run_compatibility(
         _initialize_isolated_worktree(worktree, bootstrap_environment)
         python = _create_venv(temp_root / "venv", bootstrap_environment)
         command_environment = _isolated_environment(temp_root, temp_root / "venv")
+        command_environment[CANDIDATE_COMPATIBILITY_ENV] = "1"
         for command in execution_commands(python, worktree, candidates):
             _run_silent(
                 command.stage,
