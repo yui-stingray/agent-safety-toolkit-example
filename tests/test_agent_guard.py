@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import IO
 
 import pytest
+import yaml
 
 from scripts import evidence_publication
 
@@ -180,6 +181,94 @@ class DemoProcess:
         return self.output.read(), ""
 
 
+def _pin_test_owned_session_member(
+    pid: int,
+    session_id: int,
+    nonce: str,
+) -> evidence_publication._PinnedProcess | None:
+    pinned = evidence_publication._pin_session_member(pid, session_id)
+    if pinned is None:
+        return None
+    expected = f"AGENT_SAFETY_EVIDENCE_STAGE_NONCE={nonce}".encode("ascii")
+    try:
+        environment = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+        current = evidence_publication._read_process_identity(pid)
+        if (
+            expected not in environment
+            or current is None
+            or current.start_identity != pinned.identity.start_identity
+            or current.session != session_id
+            or not evidence_publication._pidfd_send_signal(pinned.pidfd, 0)
+        ):
+            os.close(pinned.pidfd)
+            return None
+        return pinned
+    except OSError:
+        os.close(pinned.pidfd)
+        return None
+
+
+def _cleanup_leaderless_test_session(session_id: int, nonce: str) -> None:
+    """Reap only pidfd-pinned members carrying this test stage's nonce."""
+    pinned: dict[tuple[int, int], evidence_publication._PinnedProcess] = {}
+    stopped: set[tuple[int, int]] = set()
+    completed = False
+    try:
+        while True:
+            for pid in evidence_publication._session_member_pids(session_id):
+                identity = evidence_publication._read_process_identity(pid)
+                if identity is None:
+                    continue
+                key = (identity.pid, identity.start_identity)
+                if key in pinned:
+                    continue
+                candidate = _pin_test_owned_session_member(pid, session_id, nonce)
+                if candidate is not None:
+                    pinned[key] = candidate
+                elif evidence_publication._read_process_identity(pid) == identity:
+                    raise RuntimeError("test-owned session identity is invalid")
+            for key, candidate in pinned.items():
+                if key in stopped:
+                    continue
+                evidence_publication._pidfd_send_signal(
+                    candidate.pidfd, signal.SIGSTOP
+                )
+                stopped.add(key)
+            for candidate in pinned.values():
+                evidence_publication._wait_pinned_stopped(candidate)
+
+            current = {
+                (identity.pid, identity.start_identity)
+                for pid in evidence_publication._session_member_pids(session_id)
+                if (identity := evidence_publication._read_process_identity(pid))
+                is not None
+            }
+            if current <= pinned.keys():
+                break
+
+        for candidate in pinned.values():
+            evidence_publication._pidfd_send_signal(candidate.pidfd, signal.SIGKILL)
+        completed = True
+        for candidate in pinned.values():
+            evidence_publication._wait_pinned_quiescent(candidate)
+    finally:
+        try:
+            if not completed:
+                for key in stopped:
+                    try:
+                        evidence_publication._pidfd_send_signal(
+                            pinned[key].pidfd, signal.SIGCONT
+                        )
+                    except evidence_publication.PublicationError:
+                        continue
+        finally:
+            for candidate in pinned.values():
+                try:
+                    os.close(candidate.pidfd)
+                except OSError:
+                    continue
+
+
 @contextmanager
 def start_demo(
     repo: Path,
@@ -213,6 +302,7 @@ def start_demo(
                         continue
                     child_pid = marker.get("child_pid")
                     child_start = marker.get("child_start")
+                    nonce = marker.get("nonce")
                     if (
                         isinstance(child_pid, int)
                         and not isinstance(child_pid, bool)
@@ -221,16 +311,34 @@ def start_demo(
                         and not isinstance(child_start, bool)
                         and child_start > 0
                     ):
-                        evidence_publication._kill_session_members(
-                            child_pid,
-                            expected_leader_start=child_start,
-                        )
+                        if (
+                            evidence_publication._read_process_identity(child_pid)
+                            is not None
+                        ):
+                            evidence_publication._kill_session_members(
+                                child_pid,
+                                expected_leader_start=child_start,
+                            )
+                        elif evidence_publication._session_executable_member_pids(
+                            child_pid
+                        ):
+                            if (
+                                not isinstance(nonce, str)
+                                or len(nonce) != 32
+                                or not set(nonce) <= set("0123456789abcdef")
+                            ):
+                                raise RuntimeError(
+                                    "test-owned staged session identity is unavailable"
+                                )
+                            _cleanup_leaderless_test_session(child_pid, nonce)
         finally:
-            evidence_publication._kill_process_session(
-                process,
-                expected_leader_start=demo.leader_start,
-            )
-            output.close()
+            try:
+                evidence_publication._kill_process_session(
+                    process,
+                    expected_leader_start=demo.leader_start,
+                )
+            finally:
+                output.close()
 
 
 def wait_for_marker(marker: Path, process: DemoProcess) -> None:
@@ -463,6 +571,23 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     checklist = PUBLISHING_CHECKLIST.read_text(encoding="utf-8")
     pr_template = PR_TEMPLATE.read_text(encoding="utf-8")
     ci_workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(ci_workflow)
+    assert isinstance(workflow, dict)
+    jobs = workflow.get("jobs")
+    assert isinstance(jobs, dict)
+    safety_demo = jobs.get("safety-demo")
+    assert isinstance(safety_demo, dict)
+    workflow_steps = safety_demo.get("steps")
+    assert isinstance(workflow_steps, list)
+
+    def named_workflow_step(name: str) -> dict[object, object]:
+        matches = [
+            step
+            for step in workflow_steps
+            if isinstance(step, dict) and step.get("name") == name
+        ]
+        assert len(matches) == 1
+        return matches[0]
 
     assert "docs/adoption-recipe.md" in readme
     preview_heading = "## Preview the agent-guard starter plan"
@@ -562,31 +687,41 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
         "python scripts/evidence_publication.py consume --repo . --consumer packaged"
         in pr_template
     )
-    assert (
-        "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7" in ci_workflow
-    )
-    assert (
-        "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6"
-        not in ci_workflow
-    )
+    checkout = named_workflow_step("Checkout")
+    assert checkout.get("uses") == "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+    checkout_with = checkout.get("with")
+    assert isinstance(checkout_with, dict)
+    assert checkout_with.get("persist-credentials") is False
     assert 'python-version: "3.12"' in ci_workflow
     assert (
         "actions/setup-python exposes the selected 3.12 runtime as `python`"
         in ci_workflow
     )
     assert "python -m venv /tmp/agent-safety-download-check" in ci_workflow
-    assert (
-        "pip download --index-url https://pypi.org/simple --no-deps --require-hashes"
-        in ci_workflow
+    download_check = named_workflow_step("Verify locked dependencies resolve from public PyPI")
+    assert download_check.get("run") == (
+        "/tmp/agent-safety-download-check/bin/python -m pip download "
+        "--index-url https://pypi.org/simple --no-deps --require-hashes "
+        "-r requirements/agent-safety-tools.txt --dest /tmp/agent-safety-downloads"
     )
     assert (
         "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt"
         in ci_workflow
     )
-    assert (
-        "python -m agent_guard.cli surface inventory --root ."
-        in ci_workflow
+    surface_inventory = named_workflow_step("Check guard workflow wiring")
+    assert surface_inventory.get("run") == (
+        "python -I -m agent_guard.cli surface inventory --root . "
+        "--context-policy .agent-guard/context-policy.yaml --schema-version v2 --json"
     )
+    assert all(
+        step.get("name") != "Check published guard workflow surface compatibility"
+        for step in workflow_steps
+        if isinstance(step, dict)
+    )
+    requirements = (ROOT / "requirements" / "agent-safety-tools.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "yui-agent-guard==0.3.9" in requirements
     assert (
         "git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json"
         in ci_workflow
@@ -627,13 +762,13 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "--output .agent-guard/evidence/agent-guard-report.json" not in readme
     assert recipe.index("scripts/policy_event_contract.py") < recipe.index("scripts/policy_admit.py")
     assert (
-        "yui-agent-guard==0.3.8 \\\n"
-        "    --hash=sha256:ec8cd9cde7925c643baa9d5e69b85f1262b1e77e47fbab8abd044956c7ede55c"
+        "yui-agent-guard==0.3.9 \\\n"
+        "    --hash=sha256:93c9a53f651f5f09e2ee4f9e0348221eeb8bd9a75c4710e6d56e89e22e226cee"
         in requirements
     )
     assert (
-        "yui-agent-policy==0.1.17 \\\n"
-        "    --hash=sha256:45a647f0829952029e8cbd9fcc0396d4155201e74a6bf3d7cfdd79bb928fe153"
+        "yui-agent-policy==0.1.18 \\\n"
+        "    --hash=sha256:f48ac054e9c0a5c65966f587f56c89709ddc87fd7ba34f3d34c507d404cf0c25"
         in requirements
     )
     assert requirements.startswith(
@@ -662,7 +797,10 @@ def test_toolkit_policy_integration_boundary_is_documented() -> None:
     assert "validate_toolkit_policy(policy)" in wrapper
     for document in documents:
         normalized = " ".join(document.split())
-        assert "0.1.17 extends the bounded example-hook contract" in normalized
+        assert "0.1.18 extends the bounded example-hook contract" in normalized
+        assert "Bash comment rules before tokenization" in normalized
+        assert "line-continuation-formed process substitutions" in normalized
+        assert "0.1.17 hardening" in normalized
         assert "unresolved parameter expansion can become a `wait` option" in normalized
         assert "any argument of a recognized Git command" in normalized
         assert "global options before its subcommand" in normalized
@@ -705,7 +843,10 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
         assert "CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64" in normalized
         assert "GNU `timeout`" in normalized
         assert "12-second external supervisor" in normalized
-        assert "0.3.8 retains v2 audit-event path binding and independently bounds context scans" in normalized
+        assert "0.3.9 retains v2 audit-event path binding and independently bounds context scans" in normalized
+        assert "requires isolated Python module launchers for workflow evidence" in normalized
+        assert "binds report outputs against link traversal" in normalized
+        assert "rejects duplicate constructed YAML keys" in normalized
         assert "meaning-changing workflow option overrides" in normalized
         assert "hostile Git inspection state" in normalized
         assert "unbounded inventory or transform inputs" in normalized
@@ -741,7 +882,7 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
     assert 'assert platform.system() == "Linux"' in workflow
     assert 'assert platform.machine() == "x86_64"' in workflow
     assert (
-        "python -m agent_guard.cli surface inventory --root ."
+        "python -I -m agent_guard.cli surface inventory --root ."
         in workflow
     )
 
@@ -875,6 +1016,14 @@ def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> N
     manifest = report["evidence_pack_manifest"]
     assert report["report"]["schema_version"] == "agent-guard.report_evidence.v2"
     assert manifest["schema_version"] == "agent-guard.evidence_pack_manifest.v2"
+    workflow_references = [
+        surface
+        for surface in report["surface_inventory"]["surfaces"]
+        if surface["surface"] == "workflow_reference"
+    ]
+    assert [surface["command"] for surface in workflow_references] == [
+        {"scanner": "surface", "command": "inventory"}
+    ]
     evidence_surfaces = [
         surface
         for surface in report["surface_inventory"]["surfaces"]
@@ -1329,6 +1478,174 @@ def test_session_cleanup_preserves_leaderless_active_session(
             41,
             expected_leader_start=101,
         )
+
+
+@pytest.mark.parametrize("matches", [False, True])
+def test_test_cleanup_pins_only_stage_nonce_bound_processes(
+    monkeypatch: pytest.MonkeyPatch,
+    matches: bool,
+) -> None:
+    identity = evidence_publication._ProcessIdentity(42, "S", 42, 41, 303)
+    read_fd, write_fd = os.pipe()
+    pinned = evidence_publication._PinnedProcess(identity, os.dup(read_fd))
+    nonce = "0" * 32
+    observed_nonce = nonce if matches else "1" * 32
+    sent: list[int] = []
+    monkeypatch.setattr(
+        evidence_publication, "_pin_session_member", lambda *_args: pinned
+    )
+    monkeypatch.setattr(
+        evidence_publication, "_read_process_identity", lambda _pid: identity
+    )
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda _path: (
+            f"AGENT_SAFETY_EVIDENCE_STAGE_NONCE={observed_nonce}\0".encode("ascii")
+        ),
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pidfd_send_signal",
+        lambda _pidfd, signum: sent.append(signum) or True,
+    )
+    try:
+        result = _pin_test_owned_session_member(42, 41, nonce)
+        if matches:
+            assert result is pinned
+            assert sent == [0]
+            os.close(pinned.pidfd)
+        else:
+            assert result is None
+            assert sent == []
+            with pytest.raises(OSError):
+                os.fstat(pinned.pidfd)
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+
+
+def test_test_cleanup_rejects_unowned_reused_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = evidence_publication._ProcessIdentity(42, "S", 42, 41, 303)
+    monkeypatch.setattr(
+        evidence_publication, "_session_member_pids", lambda _session: {42}
+    )
+    monkeypatch.setattr(
+        evidence_publication, "_read_process_identity", lambda _pid: identity
+    )
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_pin_test_owned_session_member",
+        lambda *_args: None,
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pidfd_send_signal",
+        lambda *_args: pytest.fail("unowned process was signalled"),
+    )
+
+    with pytest.raises(RuntimeError, match="test-owned session identity is invalid"):
+        _cleanup_leaderless_test_session(41, "0" * 32)
+
+
+def test_test_cleanup_signals_only_nonce_bound_session_members(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = evidence_publication._ProcessIdentity(42, "S", 42, 41, 303)
+    read_fd, write_fd = os.pipe()
+    pinned = evidence_publication._PinnedProcess(identity, os.dup(read_fd))
+    sent: list[int] = []
+    monkeypatch.setattr(
+        evidence_publication, "_session_member_pids", lambda _session: {42}
+    )
+    monkeypatch.setattr(
+        evidence_publication, "_read_process_identity", lambda _pid: identity
+    )
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_pin_test_owned_session_member",
+        lambda *_args: pinned,
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pidfd_send_signal",
+        lambda _pidfd, signum: sent.append(signum) or True,
+    )
+    monkeypatch.setattr(evidence_publication, "_wait_pinned_stopped", lambda _item: None)
+    monkeypatch.setattr(
+        evidence_publication, "_wait_pinned_quiescent", lambda _item: None
+    )
+    try:
+        _cleanup_leaderless_test_session(41, "0" * 32)
+        assert sent == [signal.SIGSTOP, signal.SIGKILL]
+        with pytest.raises(OSError):
+            os.fstat(pinned.pidfd)
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+
+
+def test_test_cleanup_attempts_every_resume_and_closes_pidfds_after_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identities = {
+        42: evidence_publication._ProcessIdentity(42, "S", 42, 41, 303),
+        43: evidence_publication._ProcessIdentity(43, "S", 43, 41, 304),
+    }
+    raw_fds = [os.pipe(), os.pipe()]
+    pinned = {
+        pid: evidence_publication._PinnedProcess(
+            identity,
+            os.dup(raw_fds[index][0]),
+        )
+        for index, (pid, identity) in enumerate(identities.items())
+    }
+    sent: list[tuple[int, int]] = []
+    resume_attempts = 0
+
+    def send_signal(pidfd: int, signum: int) -> bool:
+        nonlocal resume_attempts
+        sent.append((pidfd, signum))
+        if signum == signal.SIGCONT:
+            resume_attempts += 1
+            if resume_attempts == 1:
+                raise evidence_publication.PublicationError("forced resume failure")
+        return True
+
+    monkeypatch.setattr(
+        evidence_publication, "_session_member_pids", lambda _session: {42, 43}
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_read_process_identity",
+        lambda pid: identities.get(pid),
+    )
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_pin_test_owned_session_member",
+        lambda pid, *_args: pinned[pid],
+    )
+    monkeypatch.setattr(evidence_publication, "_pidfd_send_signal", send_signal)
+    monkeypatch.setattr(
+        evidence_publication,
+        "_wait_pinned_stopped",
+        lambda _item: (_ for _ in ()).throw(RuntimeError("forced stop failure")),
+    )
+    try:
+        with pytest.raises(RuntimeError, match="forced stop failure"):
+            _cleanup_leaderless_test_session(41, "0" * 32)
+
+        assert [signum for _pidfd, signum in sent].count(signal.SIGSTOP) == 2
+        assert resume_attempts == 2
+        for candidate in pinned.values():
+            with pytest.raises(OSError):
+                os.fstat(candidate.pidfd)
+    finally:
+        for read_fd, write_fd in raw_fds:
+            os.close(read_fd)
+            os.close(write_fd)
 
 
 def test_session_cleanup_treats_zombies_as_quiescent(
@@ -2046,13 +2363,18 @@ def test_killed_staged_child_leaves_no_unrecoverable_backup(
         assert child_start is not None
         if kill_parent:
             writer.kill()
-        pinned = evidence_publication._pin_session_member(child_pid, child_pid)
-        assert pinned is not None
-        assert pinned.identity.start_identity == child_start
-        try:
-            evidence_publication._pidfd_send_signal(pinned.pidfd, signal.SIGKILL)
-        finally:
-            os.close(pinned.pidfd)
+            evidence_publication._kill_session_members(
+                child_pid,
+                expected_leader_start=child_start,
+            )
+        else:
+            pinned = evidence_publication._pin_session_member(child_pid, child_pid)
+            assert pinned is not None
+            assert pinned.identity.start_identity == child_start
+            try:
+                evidence_publication._pidfd_send_signal(pinned.pidfd, signal.SIGKILL)
+            finally:
+                os.close(pinned.pidfd)
         writer.communicate(timeout=30)
         assert writer.returncode != 0
         if kill_parent:

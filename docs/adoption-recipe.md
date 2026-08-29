@@ -69,11 +69,14 @@ bash scripts/run_agent_guard_bounded.sh python -m agent_guard.cli context lock -
 
 ## Toolkit Policy Integration Boundary
 
-`yui-agent-policy` 0.1.17 extends the bounded example-hook contract by failing
-closed when unresolved parameter expansion can become a `wait` option or any
-argument of a recognized Git command, including global options before its
-subcommand. It retains the 0.1.16 hardening for active output redirection,
-ANSI-C quoted words, file-writing command heads such as `tee`, and every Git
+`yui-agent-policy` 0.1.18 extends the bounded example-hook contract by applying
+Bash comment rules before tokenization and rejecting direct or
+line-continuation-formed process substitutions. It retains the 0.1.17
+hardening that fails closed when unresolved parameter expansion can become a
+`wait` option or any argument of a recognized Git command, including global
+options before its subcommand, and the 0.1.16 hardening for active output
+redirection, ANSI-C quoted words, file-writing command heads such as `tee`,
+and every Git
 push or send-pack form without an explicit visible force option. Explicit
 visible force forms remain `push.force`; the other modeled push and send-pack
 forms map to `unknown`. It also retains the 0.1.15
@@ -117,13 +120,15 @@ file for that platform instead of removing hash checking.
 The checked-in lock targets CPython 3.12 on GitHub-hosted Ubuntu Linux x86_64,
 and `run_demo.sh` rejects a different interpreter. Set `PYTHON` explicitly when
 needed. Generate a separate hash lock and CI job before claiming another
-platform. The demo also requires GNU `timeout`. `agent-guard` 0.3.8 retains v2
+platform. The demo also requires GNU `timeout`. `agent-guard` 0.3.9 retains v2
 audit-event path binding and independently bounds context scans, including
 custom context-policy regular expressions. It also fails closed on
 meaning-changing workflow option overrides, hostile Git inspection state,
 unbounded inventory or transform inputs, self-authorizing inline suppressions,
-and inconsistent evidence component sections. As a
-repository-local defense in depth, the demo retains a 12-second external
+and inconsistent evidence component sections. Version 0.3.9 additionally
+requires isolated Python module launchers for workflow evidence, binds report
+outputs against link traversal, and rejects duplicate constructed YAML keys.
+As a repository-local defense in depth, the demo retains a 12-second external
 supervisor around context check, context inventory, surface inventory, context
 lock, drift check, report, and evidence-pack manifest. This does not claim a
 fix in the installed package; review repository policy changes before
@@ -190,7 +195,7 @@ same-user process that ignores the lock or directly modifies repository files.
 
 ## Bound Audit Events
 
-`agent-guard` 0.3.8 continues to emit report and evidence-pack manifest v2
+`agent-guard` 0.3.9 continues to emit report and evidence-pack manifest v2
 artifacts, retaining v2 audit-event path binding when the report and manifest
 producer receive the same repository-relative audit event path and the recognized
 `agent-guard.public_agent_policy_audit_event.v1` profile. The v2 entry binds
@@ -198,7 +203,7 @@ canonical JSON content with sanitized digest metadata; it does not embed the
 raw event body.
 
 Pass that same path and profile to both consumers with `--repo-root .`. At
-0.3.8, v2 consumers verify supplied event content and profile; when given
+0.3.9, v2 consumers verify supplied event content and profile; when given
 `--repo-root`, they also verify the canonical repository-relative event
 location. Consumers fail closed on content substitution, wrong profiles, wrong
 event locations when
@@ -206,7 +211,7 @@ given `--repo-root`, report/manifest mismatch, and missing, extra, or
 count-mismatched evidence. Do not duplicate guard validation in this recipe.
 The generic
 `agent-policy.audit_event.v1.1` schema is not the profile recognized by
-`agent-guard` 0.3.8; retain this demo's stricter public-artifact event contract.
+`agent-guard` 0.3.9; retain this demo's stricter public-artifact event contract.
 Neither event profile records the installed `yui-agent-policy` package version. The
 hash-locked environment plus CI regeneration establish process-level version
 provenance; consumers must not infer a producer version from the standalone

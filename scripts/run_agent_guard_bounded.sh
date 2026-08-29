@@ -23,7 +23,7 @@ then
 fi
 
 if ! command -v timeout >/dev/null 2>&1; then
-  echo "A timeout supervisor is required for the agent-guard 0.3.8 defense-in-depth static checks." >&2
+  echo "A timeout supervisor is required for the agent-guard 0.3.9 defense-in-depth static checks." >&2
   exit 1
 fi
 

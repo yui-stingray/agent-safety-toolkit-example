@@ -80,11 +80,14 @@ the demo's raw repo identifier, local path, or secret-shaped value checks.
 
 ### Toolkit Policy Preflight
 
-`yui-agent-policy` 0.1.17 extends the bounded example-hook contract by failing
-closed when unresolved parameter expansion can become a `wait` option or any
-argument of a recognized Git command, including global options before its
-subcommand. It retains the 0.1.16 hardening for active output redirection,
-ANSI-C quoted words, file-writing command heads such as `tee`, and every Git
+`yui-agent-policy` 0.1.18 extends the bounded example-hook contract by applying
+Bash comment rules before tokenization and rejecting direct or
+line-continuation-formed process substitutions. It retains the 0.1.17
+hardening that fails closed when unresolved parameter expansion can become a
+`wait` option or any argument of a recognized Git command, including global
+options before its subcommand, and the 0.1.16 hardening for active output
+redirection, ANSI-C quoted words, file-writing command heads such as `tee`,
+and every Git
 push or send-pack form without an explicit visible force option. Explicit
 visible force forms remain `push.force`; the other modeled push and send-pack
 forms map to `unknown`. It also retains the 0.1.15
@@ -123,13 +126,15 @@ python scripts/evidence_publication.py consume --repo . --consumer packaged
 
 `scripts/run_demo.sh` rejects non-3.12 interpreters. Set `PYTHON` to an
 explicit Python 3.12 executable when the activated environment is not first on
-`PATH`. It also requires GNU `timeout`. `agent-guard` 0.3.8 retains v2
+`PATH`. It also requires GNU `timeout`. `agent-guard` 0.3.9 retains v2
 audit-event path binding and independently bounds context scans, including
 custom context-policy regular expressions. It also fails closed on
 meaning-changing workflow option overrides, hostile Git inspection state,
 unbounded inventory or transform inputs, self-authorizing inline suppressions,
-and inconsistent evidence component sections. As a
-repository-local defense in depth, the script retains a 12-second external
+and inconsistent evidence component sections. Version 0.3.9 additionally
+requires isolated Python module launchers for workflow evidence, binds report
+outputs against link traversal, and rejects duplicate constructed YAML keys.
+As a repository-local defense in depth, the script retains a 12-second external
 supervisor around context check, context inventory, surface inventory, context
 lock, drift check, report, and evidence-pack manifest: timeout output is
 discarded and the demo fails closed. This does not claim a fix in the installed
@@ -269,12 +274,12 @@ in the static bundle directory.
 
 ### Bound Audit Events
 
-`agent-guard` 0.3.8 continues to emit `agent-guard.report_evidence.v2` and
+`agent-guard` 0.3.9 continues to emit `agent-guard.report_evidence.v2` and
 `agent-guard.evidence_pack_manifest.v2`, retaining v2 audit-event path binding
 when the producer receives the same repository-relative event path and the recognized
 `agent-guard.public_agent_policy_audit_event.v1` profile. The manifest records
 canonical JSON SHA-256 binding metadata, not the raw event body. Pass that path
-and profile to both consumers with `--repo-root .`. At 0.3.8, v2 consumers
+and profile to both consumers with `--repo-root .`. At 0.3.9, v2 consumers
 verify supplied event content and profile; when given `--repo-root`, they also
 verify the canonical repository-relative event location. Both consumers reject
 substitution, wrong profiles, wrong event locations when given `--repo-root`,
@@ -282,7 +287,7 @@ report/manifest mismatches, and missing, extra, or count-mismatched evidence.
 This toolkit does not duplicate guard validation.
 
 The `yui-agent-policy` generic `agent-policy.audit_event.v1.1` JSON schema is
-separate from the profile accepted by `agent-guard` 0.3.8. This demo keeps its
+separate from the profile accepted by `agent-guard` 0.3.9. This demo keeps its
 stricter public-artifact event contract, including raw repository identifier,
 local path, and secret-shaped value checks.
 
