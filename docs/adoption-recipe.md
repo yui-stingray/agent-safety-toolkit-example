@@ -144,6 +144,10 @@ journal removal and directory sync. A request observed before that decision
 rolls back; one delivered after it may return an interrupted status with the
 new complete bundle committed. The next runner or snapshot consumer
 automatically rolls back an earlier interrupted transaction.
+Keep the implementation and tests aligned with the normative
+[`evidence publication protocol`](evidence-publication-protocol.md), including
+its journal schema, sync ordering, commit linearization, and fault-injection
+acceptance criteria.
 
 Use the two `evidence_publication.py consume` commands above in a writable
 cooperating checkout. `consume` takes a nonblocking publication lock and fails

@@ -217,6 +217,9 @@ decision rolls back, while one delivered after it may return an interrupted
 status with the new complete bundle committed. Before that decision, an
 interrupted transaction is rolled back by the next runner or snapshot consumer
 without consuming its backup.
+The exact durable objects, state transitions, sync ordering, commit point, and
+fault-test contract are normative in
+[`docs/evidence-publication-protocol.md`](docs/evidence-publication-protocol.md).
 It refuses to replace a bundle directory containing unexpected entries, so
 unrelated local evidence is not deleted implicitly.
 Use `scripts/evidence_publication.py consume` in a writable cooperating
@@ -295,6 +298,31 @@ Neither event profile records the installed `yui-agent-policy` package
 version. The hash-locked environment plus CI regeneration establish
 process-level version provenance; consumers must not infer a producer version
 from the standalone event or evidence-pack binding.
+
+## Candidate Wheel Compatibility Gate
+
+Package release CI can test a reviewed local `yui-agent-guard` or
+`yui-agent-policy` candidate before upload without changing this repository's
+published pins or committed evidence:
+
+```bash
+python3.12 scripts/check_candidate_wheel_compatibility.py \
+  --wheel /path/to/reviewed-candidate.whl
+```
+
+Pass `--wheel` a second time when evaluating both distributions together. The
+helper requires CPython 3.12 on Linux x86_64, copies the candidate into private
+temporary state, installs the committed exact-hash lock, overlays the candidate
+with `--no-index --no-deps --force-reinstall`, and runs `pip check`, full pytest,
+the demo, and both snapshot consumers in a temporary Toolkit copy. It discards
+subprocess output on failure and emits only a fixed stage diagnostic.
+
+The upstream workflow MUST build once, pass its package/wheel contract first,
+checkout an exact Toolkit commit with credentials disabled, then invoke this
+gate before attestation or upload. This is compatibility execution of reviewed
+release code, not a sandbox for an untrusted wheel. Do not update this
+repository's lock, docs version, or committed v2 evidence until the exact
+distribution is publicly available and verified.
 
 ## Updating Digests
 

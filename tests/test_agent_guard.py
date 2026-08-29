@@ -786,6 +786,25 @@ def test_policy_event_contract_is_pinned_and_adoption_documented() -> None:
     assert "agent-guard.public_agent_policy_audit_event.v1" in readme
 
 
+def test_candidate_wheel_gate_is_documented_as_prepublication_compatibility() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    checklist = (ROOT / "docs" / "publishing-checklist.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(readme.split())
+    normalized_checklist = " ".join(checklist.split())
+
+    assert "## Candidate Wheel Compatibility Gate" in readme
+    assert "scripts/check_candidate_wheel_compatibility.py" in readme
+    assert "--no-index --no-deps --force-reinstall" in normalized
+    assert "package/wheel contract first" in normalized
+    assert "before attestation or upload" in normalized
+    assert "not a sandbox for an untrusted wheel" in normalized
+    assert "Do not update this repository's lock" in normalized
+    assert "exact Toolkit commit" in normalized_checklist
+    assert "live lock and evidence remain pinned" in normalized_checklist
+
+
 def test_toolkit_policy_integration_boundary_is_documented() -> None:
     wrapper = (ROOT / "scripts" / "policy_admit.py").read_text(encoding="utf-8")
     documents = (
@@ -837,6 +856,9 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
     runner = RUN_DEMO.read_text(encoding="utf-8")
     bounded_runner = BOUNDED_GUARD.read_text(encoding="utf-8")
     workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    publication_protocol = (
+        ROOT / "docs" / "evidence-publication-protocol.md"
+    ).read_text(encoding="utf-8")
 
     for document in (readme, recipe):
         normalized = " ".join(document.split())
@@ -864,6 +886,18 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
         assert "NFS, Windows, macOS, container volumes" in normalized
         assert "Git submodules" in normalized
         assert "same-user" in normalized
+
+    normalized_protocol = " ".join(publication_protocol.split())
+    assert "agent-safety-toolkit.evidence-stage.v1" in publication_protocol
+    assert "agent-safety-toolkit.evidence-transaction.v1" in publication_protocol
+    assert "agent-safety-toolkit.evidence-publication.v1" in publication_protocol
+    assert "PUBLISHED_UNCOMMITTED" in publication_protocol
+    assert "commit linearization point" in normalized_protocol
+    assert "journal without its transaction marker is invalid" in normalized_protocol
+    assert "SIGKILL-equivalent crash" in normalized_protocol
+    assert "second-run byte stability" in normalized_protocol
+    assert "docs/evidence-publication-protocol.md" in readme
+    assert "evidence-publication-protocol.md" in recipe
 
     assert 'PYTHON="$PYTHON_BIN" bash scripts/run_agent_guard_bounded.sh \\\n' in runner
     assert 'python -m agent_guard.cli "$@"' in runner
