@@ -138,4 +138,3 @@ The implementation MUST keep regressions for:
 These tests prove crash consistency only within the platform boundary above.
 They do not prove durability against hostile storage, an uncooperative same-user
 process, or physical media failure that violates acknowledged `fsync` semantics.
-
