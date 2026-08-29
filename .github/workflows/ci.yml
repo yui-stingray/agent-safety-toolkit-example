@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
@@ -48,7 +50,12 @@ jobs:
         run: python -m pytest -q
 
       - name: Check guard workflow wiring
-        run: python -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json
+        run: python -I -m agent_guard.cli surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json
+
+      # Public 0.3.8 inventory does not yet index the isolated module form.
+      # Keep this real compatibility scan until the pinned guard is updated.
+      - name: Check published guard workflow surface compatibility
+        run: agent-guard surface inventory --root . --context-policy .agent-guard/context-policy.yaml --schema-version v2 --json
 
       - name: Run end-to-end demo
         run: bash scripts/run_demo.sh

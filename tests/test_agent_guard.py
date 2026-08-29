@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import IO
 
 import pytest
+import yaml
 
 from scripts import evidence_publication
 
@@ -570,6 +571,23 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
     checklist = PUBLISHING_CHECKLIST.read_text(encoding="utf-8")
     pr_template = PR_TEMPLATE.read_text(encoding="utf-8")
     ci_workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(ci_workflow)
+    assert isinstance(workflow, dict)
+    jobs = workflow.get("jobs")
+    assert isinstance(jobs, dict)
+    safety_demo = jobs.get("safety-demo")
+    assert isinstance(safety_demo, dict)
+    workflow_steps = safety_demo.get("steps")
+    assert isinstance(workflow_steps, list)
+
+    def named_workflow_step(name: str) -> dict[object, object]:
+        matches = [
+            step
+            for step in workflow_steps
+            if isinstance(step, dict) and step.get("name") == name
+        ]
+        assert len(matches) == 1
+        return matches[0]
 
     assert "docs/adoption-recipe.md" in readme
     preview_heading = "## Preview the agent-guard starter plan"
@@ -669,31 +687,48 @@ def test_adoption_recipe_is_copyable_and_public_safe() -> None:
         "python scripts/evidence_publication.py consume --repo . --consumer packaged"
         in pr_template
     )
-    assert (
-        "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7" in ci_workflow
-    )
-    assert (
-        "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6"
-        not in ci_workflow
-    )
+    checkout = named_workflow_step("Checkout")
+    assert checkout.get("uses") == "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+    checkout_with = checkout.get("with")
+    assert isinstance(checkout_with, dict)
+    assert checkout_with.get("persist-credentials") is False
     assert 'python-version: "3.12"' in ci_workflow
     assert (
         "actions/setup-python exposes the selected 3.12 runtime as `python`"
         in ci_workflow
     )
     assert "python -m venv /tmp/agent-safety-download-check" in ci_workflow
-    assert (
-        "pip download --index-url https://pypi.org/simple --no-deps --require-hashes"
-        in ci_workflow
+    download_check = named_workflow_step("Verify locked dependencies resolve from public PyPI")
+    assert download_check.get("run") == (
+        "/tmp/agent-safety-download-check/bin/python -m pip download "
+        "--index-url https://pypi.org/simple --no-deps --require-hashes "
+        "-r requirements/agent-safety-tools.txt --dest /tmp/agent-safety-downloads"
     )
     assert (
         "python -m pip install --require-hashes -r requirements/agent-safety-tools.txt"
         in ci_workflow
     )
-    assert (
-        "python -m agent_guard.cli surface inventory --root ."
-        in ci_workflow
+    surface_inventory = named_workflow_step("Check guard workflow wiring")
+    assert surface_inventory.get("run") == (
+        "python -I -m agent_guard.cli surface inventory --root . "
+        "--context-policy .agent-guard/context-policy.yaml --schema-version v2 --json"
     )
+    published_compatibility = named_workflow_step(
+        "Check published guard workflow surface compatibility"
+    )
+    assert published_compatibility.get("run") == (
+        "agent-guard surface inventory --root . "
+        "--context-policy .agent-guard/context-policy.yaml --schema-version v2 --json"
+    )
+    assert sum(
+        str(step.get("run", "")).startswith("agent-guard surface inventory ")
+        for step in workflow_steps
+        if isinstance(step, dict)
+    ) == 1
+    requirements = (ROOT / "requirements" / "agent-safety-tools.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "yui-agent-guard==0.3.8" in requirements
     assert (
         "git diff --exit-code -- .agent-guard/evidence/agent-guard-report.json"
         in ci_workflow
@@ -848,7 +883,7 @@ def test_demo_documents_platform_timeout_and_publication_boundaries() -> None:
     assert 'assert platform.system() == "Linux"' in workflow
     assert 'assert platform.machine() == "x86_64"' in workflow
     assert (
-        "python -m agent_guard.cli surface inventory --root ."
+        "python -I -m agent_guard.cli surface inventory --root ."
         in workflow
     )
 
@@ -982,6 +1017,14 @@ def test_demo_runner_produces_deterministic_public_evidence(tmp_path: Path) -> N
     manifest = report["evidence_pack_manifest"]
     assert report["report"]["schema_version"] == "agent-guard.report_evidence.v2"
     assert manifest["schema_version"] == "agent-guard.evidence_pack_manifest.v2"
+    workflow_references = [
+        surface
+        for surface in report["surface_inventory"]["surfaces"]
+        if surface["surface"] == "workflow_reference"
+    ]
+    assert [surface["command"] for surface in workflow_references] == [
+        {"scanner": "surface", "command": "inventory"}
+    ]
     evidence_surfaces = [
         surface
         for surface in report["surface_inventory"]["surfaces"]
