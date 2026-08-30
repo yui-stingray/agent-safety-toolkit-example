@@ -9,6 +9,12 @@ Use this checklist before making a demo repository public or before linking it f
 - CI has read-only repository permissions.
 - GitHub Actions are pinned to commit SHAs.
 - Dependencies are exact and hash-pinned.
+- Before either upstream package is uploaded, its reviewed candidate wheel has
+  passed `scripts/check_candidate_wheel_compatibility.py` from an exact Toolkit
+  commit after the upstream package contract. The gate generates and commits a
+  candidate-only evidence baseline inside its disposable copy before full pytest,
+  so self-size and byte-stability assertions remain active. The live lock and
+  evidence remain pinned to published distributions.
 - Public evidence handoffs do not include raw per-scanner JSON from a private repository.
 - Executable negative payloads are generated during tests, not committed.
   Any committed adversarial fixtures are inert, dummy-valued, and fenced for
