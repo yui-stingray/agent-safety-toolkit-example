@@ -2084,6 +2084,47 @@ def test_signal_during_staged_process_launch_is_deferred_and_reaped(
             )
 
 
+def _test_orphan_state(pid: int, start: int, session: int) -> str:
+    current = evidence_publication._read_process_identity(pid)
+    if current is None:
+        return "unknown" if evidence_publication._pid_is_alive(pid) else "gone"
+    if current.start_identity != start:
+        return "reused"
+    if current.state in {"Z", "X", "x"}:
+        return "exited"
+    if current.session != session:
+        return "moved"
+    return "live"
+
+
+def _cleanup_test_orphan(pid: int, start: int, session: int, nonce: str) -> None:
+    state = _test_orphan_state(pid, start, session)
+    if state in {"gone", "reused", "exited"}:
+        return
+    if state != "live":
+        raise RuntimeError("test-owned descendant cleanup is unproven")
+    pinned = _pin_test_owned_session_member(pid, session, nonce)
+    if pinned is None:
+        if _test_orphan_state(pid, start, session) in {"gone", "reused", "exited"}:
+            return
+        raise RuntimeError("test-owned descendant cleanup is unproven")
+    try:
+        if (
+            pinned.identity.pid != pid
+            or pinned.identity.start_identity != start
+            or pinned.identity.session != session
+        ):
+            raise RuntimeError("test-owned descendant cleanup is unproven")
+        state = _test_orphan_state(pid, start, session)
+        if state in {"gone", "reused", "exited"}:
+            return
+        if state != "live":
+            raise RuntimeError("test-owned descendant cleanup is unproven")
+        evidence_publication._pidfd_send_signal(pinned.pidfd, signal.SIGKILL)
+    finally:
+        os.close(pinned.pidfd)
+
+
 def test_successful_stage_leader_cannot_leave_background_descendant(
     tmp_path: Path,
 ) -> None:
@@ -2092,10 +2133,24 @@ def test_successful_stage_leader_cannot_leave_background_descendant(
     container, stage, nonce = evidence_publication._prepare_stage(repo, state)
     runtime = container / evidence_publication.STAGE_RUNTIME
     orphan_marker = runtime / "orphan.pid"
+    identity_marker = runtime / "orphan-identity.json"
     (stage / "scripts/run_demo.sh").write_text(
         "#!/usr/bin/env bash\n"
         "sleep 60 &\n"
-        'printf "%s\\n" "$!" > "$TMPDIR/orphan.pid"\n'
+        "orphan_pid=$!\n"
+        'printf "%s\\n" "$orphan_pid" > "$TMPDIR/orphan.pid"\n'
+        '"$PYTHON" -c '
+        "'import json, os, sys; "
+        "from pathlib import Path; "
+        "from scripts import evidence_publication as ep; "
+        "pid = int(sys.argv[1]); "
+        "identity = ep._read_process_identity(pid); "
+        "assert identity is not None and identity.session == os.getsid(0) "
+        "and identity.state not in (\"Z\", \"X\", \"x\"); "
+        "Path(sys.argv[2]).write_text(json.dumps({\"pid\": pid, "
+        "\"start_identity\": identity.start_identity, "
+        "\"session\": identity.session}), encoding=\"utf-8\")' "
+        '"$orphan_pid" "$TMPDIR/orphan-identity.json"\n'
         "exit 0\n",
         encoding="utf-8",
     )
@@ -2109,34 +2164,149 @@ def test_successful_stage_leader_cannot_leave_background_descendant(
                 termination,
             )
 
+        owner = json.loads(identity_marker.read_text(encoding="utf-8"))
         orphan_pid = int(orphan_marker.read_text(encoding="utf-8"))
-        orphan_identity = evidence_publication._read_process_identity(orphan_pid)
+        assert owner["pid"] == orphan_pid
         assert result == 0
-        assert orphan_identity is None or orphan_identity.state in {"Z", "X", "x"}
+        assert _test_orphan_state(
+            owner["pid"], owner["start_identity"], owner["session"]
+        ) in {"gone", "reused", "exited"}
         marker = json.loads(
             (container / evidence_publication.STAGE_MARKER).read_text(encoding="utf-8")
         )
         assert marker["child_pid"] == 0
         assert marker["child_start"] is None
     finally:
-        if orphan_marker.is_file():
-            orphan_pid = int(orphan_marker.read_text(encoding="utf-8"))
-            orphan_identity = evidence_publication._read_process_identity(orphan_pid)
-            if (
-                orphan_identity is not None
-                and orphan_identity.state not in {"Z", "X", "x"}
-            ):
-                pinned = evidence_publication._pin_session_member(
-                    orphan_pid, orphan_identity.session
-                )
-                if pinned is not None:
-                    try:
-                        evidence_publication._pidfd_send_signal(
-                            pinned.pidfd, signal.SIGKILL
-                        )
-                    finally:
-                        os.close(pinned.pidfd)
+        if identity_marker.is_file():
+            owner = json.loads(identity_marker.read_text(encoding="utf-8"))
+            _cleanup_test_orphan(
+                owner["pid"], owner["start_identity"], owner["session"], nonce
+            )
         evidence_publication._remove_stage(repo, container)
+
+
+def test_successful_stage_test_cleanup_does_not_signal_reused_pid(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    stage = tmp_path / "stage"
+    container = tmp_path / "container"
+    (stage / "scripts").mkdir(parents=True)
+    runtime = container / evidence_publication.STAGE_RUNTIME
+    runtime.mkdir(parents=True)
+    (runtime / "orphan.pid").write_text("41\n", encoding="utf-8")
+    (runtime / "orphan-identity.json").write_text(
+        json.dumps({"pid": 41, "start_identity": 101, "session": 41}),
+        encoding="utf-8",
+    )
+    (container / evidence_publication.STAGE_MARKER).write_text(
+        json.dumps({"child_pid": 0, "child_start": None}), encoding="utf-8"
+    )
+    reused = evidence_publication._ProcessIdentity(41, "S", 41, 41, 202)
+    read_fd, write_fd = os.pipe()
+    sent: list[int] = []
+
+    monkeypatch.setattr(sys.modules[__name__], "copy_demo_repo", lambda _tmp: repo)
+    monkeypatch.setattr(evidence_publication, "_ensure_state_directory", lambda _repo: tmp_path)
+    monkeypatch.setattr(
+        evidence_publication,
+        "_prepare_stage",
+        lambda _repo, _state: (container, stage, "owned-nonce"),
+    )
+    monkeypatch.setattr(evidence_publication, "_run_staged_demo", lambda *_args: 0)
+    monkeypatch.setattr(evidence_publication, "_remove_stage", lambda *_args: None)
+    monkeypatch.setattr(
+        evidence_publication, "_read_process_identity", lambda _pid: reused
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pin_session_member",
+        lambda _pid, _session: evidence_publication._PinnedProcess(
+            reused, os.dup(read_fd)
+        ),
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pidfd_send_signal",
+        lambda _fd, signum: sent.append(signum),
+    )
+    try:
+        unexpected_failure: AssertionError | None = None
+        try:
+            test_successful_stage_leader_cannot_leave_background_descendant(tmp_path)
+        except AssertionError as exc:
+            unexpected_failure = exc
+        assert sent == []
+        assert unexpected_failure is None
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+
+
+@pytest.mark.parametrize(
+    ("observed", "pid_alive", "expected_signal", "unproven"),
+    [
+        (evidence_publication._ProcessIdentity(41, "S", 41, 41, 101), True, True, False),
+        (evidence_publication._ProcessIdentity(41, "S", 41, 41, 202), True, False, False),
+        (evidence_publication._ProcessIdentity(41, "S", 42, 42, 101), True, False, True),
+        (None, False, False, False),
+        (evidence_publication._ProcessIdentity(41, "Z", 41, 41, 101), True, False, False),
+    ],
+    ids=("owned", "reused-pid", "moved-session", "gone", "zombie"),
+)
+def test_cleanup_test_orphan_signals_only_original_live_identity(
+    monkeypatch: pytest.MonkeyPatch,
+    observed: evidence_publication._ProcessIdentity | None,
+    pid_alive: bool,
+    expected_signal: bool,
+    unproven: bool,
+) -> None:
+    sent: list[int] = []
+    read_fd, write_fd = os.pipe()
+    monkeypatch.setattr(evidence_publication, "_read_process_identity", lambda _pid: observed)
+    monkeypatch.setattr(evidence_publication, "_pid_is_alive", lambda _pid: pid_alive)
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_pin_test_owned_session_member",
+        lambda _pid, _session, _nonce: evidence_publication._PinnedProcess(
+            observed, os.dup(read_fd)
+        ),
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pidfd_send_signal",
+        lambda _fd, signum: sent.append(signum),
+    )
+    try:
+        if unproven:
+            with pytest.raises(RuntimeError, match="cleanup is unproven"):
+                _cleanup_test_orphan(41, 101, 41, "owned-nonce")
+        else:
+            _cleanup_test_orphan(41, 101, 41, "owned-nonce")
+        assert sent == ([signal.SIGKILL] if expected_signal else [])
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+
+
+def test_cleanup_test_orphan_rejects_unproven_nonce(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owned = evidence_publication._ProcessIdentity(41, "S", 41, 41, 101)
+    sent: list[int] = []
+    monkeypatch.setattr(evidence_publication, "_read_process_identity", lambda _pid: owned)
+    monkeypatch.setattr(
+        sys.modules[__name__], "_pin_test_owned_session_member", lambda *_args: None
+    )
+    monkeypatch.setattr(
+        evidence_publication,
+        "_pidfd_send_signal",
+        lambda _fd, signum: sent.append(signum),
+    )
+    with pytest.raises(RuntimeError, match="cleanup is unproven"):
+        _cleanup_test_orphan(41, 101, 41, "owned-nonce")
+    assert sent == []
 
 
 def test_run_preserves_stage_when_child_cleanup_is_unproven(
