@@ -49,15 +49,15 @@ LOCK_NAME = "publication.lock"
 TRANSACTION_PREPARATION_PREFIX = "transaction-preparing-"
 STAGE_BACKUP_PREFIX = ".agent-safety-toolkit-example-evidence."
 
+REPORT_PATH = Path(".agent-guard/evidence/agent-guard-report.json")
+MANIFEST_PATH = Path(".agent-guard/evidence/agent-guard-evidence-pack.json")
+EVENT_PATH = Path(".agent-policy/evidence/policy-admission-event.json")
 ARTIFACTS: tuple[tuple[str, Path], ...] = (
-    ("report", Path(".agent-guard/evidence/agent-guard-report.json")),
-    ("manifest", Path(".agent-guard/evidence/agent-guard-evidence-pack.json")),
-    ("event", Path(".agent-policy/evidence/policy-admission-event.json")),
+    ("report", REPORT_PATH),
+    ("manifest", MANIFEST_PATH),
+    ("event", EVENT_PATH),
 )
-EVIDENCE_FILENAMES = {
-    "agent-guard-evidence-pack.json",
-    "agent-guard-report.json",
-}
+EVIDENCE_FILENAMES = {REPORT_PATH.name, MANIFEST_PATH.name}
 _GIT_LOCAL_ENVIRONMENT_VARIABLES = {
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     "GIT_COMMON_DIR",
@@ -223,7 +223,10 @@ class _LiveArtifact:
     role: str
     relative: Path
     directory: _PinnedDirectory
-    name: str
+
+    @property
+    def name(self) -> str:
+        return self.relative.name
 
 
 @dataclass(frozen=True)
@@ -294,11 +297,9 @@ def _open_live_artifacts(repo: Path, *, create_parents: bool) -> Iterator[_LiveA
         policy_evidence = _open_directory_at(policy, "evidence", create=create_parents)
         descriptors.append(policy_evidence.fd)
         artifacts = (
-            _LiveArtifact("report", ARTIFACTS[0][1], guard_evidence, ARTIFACTS[0][1].name),
-            _LiveArtifact(
-                "manifest", ARTIFACTS[1][1], guard_evidence, ARTIFACTS[1][1].name
-            ),
-            _LiveArtifact("event", ARTIFACTS[2][1], policy_evidence, ARTIFACTS[2][1].name),
+            _LiveArtifact("report", REPORT_PATH, guard_evidence),
+            _LiveArtifact("manifest", MANIFEST_PATH, guard_evidence),
+            _LiveArtifact("event", EVENT_PATH, policy_evidence),
         )
         live = _LiveArtifacts(
             repo,
@@ -394,12 +395,9 @@ def _live_stat(artifact: _LiveArtifact) -> os.stat_result | None:
 
 
 def _digest(path: Path) -> str:
-    digest = hashlib.sha256()
     with _open_regular_file(path) as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    encoded = base64.b32encode(digest.digest()).decode("ascii")
-    return "b" + encoded.rstrip("=").lower()
+        return _digest_fd(handle.fileno())
+
 
 
 @contextmanager
@@ -470,24 +468,16 @@ def _replace_json_durable(path: Path, payload: dict[str, Any]) -> None:
 def _copy_file_durable(
     source: Path,
     destination: Path,
-    mode: int | None = None,
     *,
-    temporary_path: Path | None = None,
     pause_point: str | None = None,
 ) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = temporary_path or (
-        destination.parent / f".{destination.name}.{uuid.uuid4().hex}.tmp"
-    )
-    if temporary.parent != destination.parent:
-        raise PublicationError("evidence publication state is invalid")
+    temporary = destination.parent / f".{destination.name}.{uuid.uuid4().hex}.tmp"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
     try:
-        fd = os.open(temporary, flags, mode if mode is not None else 0o600)
+        fd = os.open(temporary, flags, 0o600)
         try:
-            if mode is not None:
-                os.fchmod(fd, mode)
             if pause_point is not None:
                 _pause_for_test(pause_point)
             with (
@@ -499,8 +489,7 @@ def _copy_file_durable(
                 os.fsync(output.fileno())
         finally:
             os.close(fd)
-        if mode is None:
-            os.chmod(temporary, stat.S_IMODE(os.lstat(source).st_mode))
+        os.chmod(temporary, stat.S_IMODE(os.lstat(source).st_mode))
         os.replace(temporary, destination)
         _fsync_directory(destination.parent)
     except BaseException:
@@ -1062,7 +1051,7 @@ def _fallback_ignore(root: Path):
                 if name not in EVIDENCE_FILENAMES:
                     ignored.add(name)
             elif relative_directory == Path(".agent-policy/evidence"):
-                if name != ARTIFACTS[2][1].name:
+                if name != EVENT_PATH.name:
                     ignored.add(name)
         return ignored
 
@@ -1636,8 +1625,8 @@ def _snapshot_live_bundle(live: _LiveArtifacts, destination_root: Path) -> None:
 
 def _consumer_command(repo: Path, snapshot: Path, consumer: str) -> list[str]:
     evidence_dir = snapshot / ".agent-guard/evidence"
-    report = snapshot / ARTIFACTS[0][1]
-    event = snapshot / ARTIFACTS[2][1]
+    report = snapshot / REPORT_PATH
+    event = snapshot / EVENT_PATH
     common = [
         "--repo-root",
         str(snapshot),
